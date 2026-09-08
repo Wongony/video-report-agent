@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Video Visual Report · Bilibili</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --ink: #172033; --muted: #667085; --line: #dce5f2; --blue: #4776ee;
+      --pink: #ed72b6; --blue-soft: #eef4ff; --pink-soft: #fff0f8;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; min-height: 100%; color: var(--ink);
+      background:
+        radial-gradient(circle at 8% 5%, #eaf1ff 0, transparent 34%),
+        radial-gradient(circle at 92% 18%, #ffedf7 0, transparent 30%), #f8fbff;
+      overflow-x: hidden;
+    }
+    body { padding: clamp(20px, 5vw, 72px) 16px; }
+    main { width: min(760px, 100%); margin: 0 auto; }
+    .eyebrow {
+      color: var(--blue); font-size: 12px; font-weight: 750; letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 10px 0 12px; font-size: clamp(30px, 7vw, 56px);
+      line-height: 1.05; letter-spacing: -.04em;
+    }
+    .intro { color: var(--muted); max-width: 650px; line-height: 1.7; }
+    .card {
+      position: relative;
+      margin-top: 28px; padding: clamp(20px, 4vw, 34px); border: 1px solid #e3eaf5;
+      border-radius: 24px; background: #ffffffd9;
+      box-shadow: 0 22px 60px #526b9c1c; backdrop-filter: blur(12px);
+    }
+    label { display: block; margin-bottom: 9px; color: #344054; font-size: 14px; font-weight: 700; }
+    input, button, select { font: inherit; }
+    input, button { width: 100%; min-height: 48px; border-radius: 11px; }
+    input {
+      border: 1px solid #cbd6e6; padding: 0 14px; color: var(--ink); background: #fff;
+      box-shadow: inset 0 1px 2px #1018280a;
+    }
+    button {
+      margin-top: 16px; border: 0; padding: 0 18px; color: white;
+      background: linear-gradient(100deg, var(--blue), #8177ed 52%, var(--pink));
+      box-shadow: 0 10px 24px #6978e934; font-weight: 750; cursor: pointer;
+    }
+    button:disabled { cursor: wait; opacity: .52; }
+    .settings-button {
+      display: inline-flex; flex-shrink: 0; align-items: center;
+      gap: 7px; width: auto; min-height: 36px; margin: 0; padding: 0 11px;
+      border: 1px solid var(--line); border-radius: 999px; color: #526079;
+      background: #f8faff; box-shadow: none; font-size: 12px; font-weight: 700;
+    }
+    .settings-button svg { width: 16px; height: 16px; }
+    .settings-button:hover {
+      color: var(--blue); border-color: #b8c9ed; background: var(--blue-soft);
+    }
+    .model-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(110px, 1fr); gap: 14px; margin-top: 20px; }
+    .model-row > div { min-width: 0; }
+    .model-row select, #model-form select { width: 100%; min-height: 48px; border: 1px solid #cbd6e6; border-radius: 11px; padding: 0 10px; color: var(--ink); background: #fff; }
+    #model-form .field-group { margin-top: 16px; }
+    #model-form input[type=checkbox] { width: 18px; min-height: 18px; vertical-align: middle; }
+    .model-error { color: #a62c3c; font-size: 13px; line-height: 1.5; }
+    .model-error:empty { display: none; }
+    @media (max-width: 480px) { .model-row { grid-template-columns: minmax(0, 1fr); } }
+    .settings-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-bottom: 20px; }
+    .model-summary { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 12px; color: var(--muted); }
+    .model-summary-text { overflow-wrap: anywhere; }
+    .connection-dot { display: inline-block; flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; background: #98a2b3; }
+    .connection-dot[data-state="connected"] { background: #16804a; }
+    .connection-dot[data-state="failed"] { background: #cf3345; }
+    .connection-info { display: flex; align-items: center; gap: 7px; margin: 12px 0; font-size: 12px; color: var(--muted); }
+    .connection-toast { position: fixed; inset: 16px 16px auto; z-index: 100; width: min(520px, calc(100% - 32px)); margin: 0 auto; padding: 14px 18px; border: 1px solid #d34651; border-radius: 11px; background: #fff0f1; color: #a51e30; font-size: 14px; line-height: 1.6; }
+    .elapsed { font-variant-numeric: tabular-nums; }
+    .field-group { margin-top: 16px; }
+    .settings-dialog {
+      width: min(460px, calc(100% - 32px)); padding: 0; border: 1px solid #dce5f2;
+      border-radius: 20px; color: var(--ink); background: #fff;
+      box-shadow: 0 28px 80px #25386438;
+    }
+    #advanced-settings { width: min(640px, calc(100% - 32px)); max-height: calc(100dvh - 32px); }
+    #advanced-settings .settings-panel { padding: clamp(24px, 5vw, 36px); }
+    .settings-section { margin-top: 28px; padding-top: 28px; border-top: 1px solid var(--line); }
+    .settings-section .model-row { margin-top: 0; gap: 20px; }
+    .settings-section .field-group { margin-top: 24px; }
+    .settings-section select { width: 100%; min-height: 48px; border: 1px solid #cbd6e6; border-radius: 11px; padding: 0 12px; color: var(--ink); background: #fff; }
+    .settings-section select:disabled { color: #667085; background: #f2f5fa; cursor: not-allowed; }
+    .settings-section .settings-copy { margin-bottom: 12px; }
+    .settings-dialog::backdrop { background: #17203366; backdrop-filter: blur(3px); }
+    .settings-panel { padding: 24px; }
+    .settings-header {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 18px;
+    }
+    .settings-header h2 { margin: 0; font-size: 20px; }
+    .settings-copy { margin: 7px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .dialog-close {
+      width: 34px; min-height: 34px; margin: -5px -5px 0 0; padding: 0; border-radius: 50%;
+      color: #667085; background: #f2f5fa; box-shadow: none; font-size: 20px;
+    }
+    .file-status { min-height: 20px; margin: 9px 0 0; color: var(--muted); font-size: 12px; }
+    :focus-visible { outline: 3px solid #7aa2ff; outline-offset: 3px; }
+    .source-info {
+      min-height: 24px; margin-top: 12px; color: var(--muted); font-size: 13px;
+      line-height: 1.5; overflow-wrap: anywhere;
+    }
+    .status { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
+    .status-title {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap;
+    }
+    .status-label { color: var(--ink); font-size: 18px; font-weight: 750; }
+    .status-code {
+      color: var(--blue); font-size: 13px; font-weight: 700;
+    }
+    .status-detail {
+      margin: 10px 0 0; color: var(--muted); line-height: 1.55; overflow-wrap: anywhere;
+    }
+    .progress-track {
+      height: 6px; margin: 22px 9px 0; border-radius: 99px; background: #e9eef7;
+      overflow: hidden;
+    }
+    .progress-fill {
+      width: 0; height: 100%; border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--pink));
+      transition: width .45s ease;
+    }
+    .progress-steps {
+      display: grid; grid-template-columns: repeat(4, 1fr); margin-top: -12px;
+      list-style: none; padding: 0;
+    }
+    .progress-step { position: relative; text-align: center; color: #98a2b3; font-size: 12px; }
+    .step-dot {
+      display: grid; width: 20px; height: 20px; margin: 0 auto 9px; place-items: center;
+      border: 4px solid #fff; border-radius: 50%; background: #d5ddea;
+      box-shadow: 0 0 0 1px #d5ddea; transition: background .25s, box-shadow .25s;
+    }
+    .progress-step.is-current, .progress-step.is-complete { color: #344054; font-weight: 700; }
+    .progress-step.is-complete .step-dot {
+      background: var(--blue); box-shadow: 0 0 0 1px var(--blue);
+    }
+    .progress-step.is-current .step-dot {
+      background: var(--pink); box-shadow: 0 0 0 4px var(--pink-soft), 0 0 0 5px #ef9dca;
+      animation: step-breathe 1.8s ease-in-out infinite;
+    }
+    @keyframes step-breathe {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 4px var(--pink-soft), 0 0 0 5px #ef9dca; }
+      50% { transform: scale(1.12); box-shadow: 0 0 0 8px #fff0f899, 0 0 0 9px #ef9dca66; }
+    }
+    .report-link {
+      display: inline-block; margin-top: 16px; padding: 10px 15px; border-radius: 10px;
+      color: #315dcd; background: var(--blue-soft); font-weight: 700; text-decoration: none;
+    }
+    .history-button {
+      color: #526079; background: #f8faff; border: 1px solid var(--line); box-shadow: none;
+    }
+    .history-button:hover { color: var(--blue); background: var(--blue-soft); }
+    .history-list { display: grid; gap: 10px; max-height: min(56vh, 520px); overflow-y: auto; }
+    .history-item {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px;
+      padding: 14px; border: 1px solid var(--line); border-radius: 13px; background: #fbfcff;
+    }
+    .history-title { margin: 0; color: var(--ink); font-size: 14px; font-weight: 750; }
+    .history-meta { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+    .history-link {
+      color: #315dcd; font-size: 13px; font-weight: 750; text-decoration: none;
+      white-space: nowrap;
+    }
+    .history-empty { margin: 10px 0; color: var(--muted); text-align: center; }
+    [hidden] { display: none !important; }
+    @media (max-width: 520px) {
+      body { padding-top: 28px; }
+      .card { margin-top: 22px; border-radius: 14px; }
+      .status-title { display: block; }
+      .status-code { display: block; margin-top: 5px; }
+      .progress-step { font-size: 11px; }
+    }
+    @media (min-width: 521px) and (max-height: 820px) {
+      body { padding-top: 8px; padding-bottom: 8px; }
+      h1 { font-size: 40px; }
+      .intro { margin-bottom: 0; font-size: 14px; line-height: 1.5; }
+      .card { margin-top: 16px; padding: 20px; }
+      .settings-toolbar { margin-bottom: 12px; }
+      .status { margin-top: 16px; padding-top: 16px; }
+      .card > button { min-height: 44px; margin-top: 12px; }
+      .progress-steps { margin-bottom: 8px; }
+      .report-link { margin-top: 8px; padding: 8px 12px; }
+      .status-detail { margin-top: 6px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .progress-fill, .step-dot { transition: none; }
+      .progress-step.is-current .step-dot { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">Video Visual Report · Local MVP</div>
+    <h1>把一个公开 BV 视频变成报告</h1>
+    <p class="intro">
+      输入一个公开的 Bilibili 视频地址或 BV 号。本地会依次下载视频、生成文字稿、理解内容，
+      最后生成一份带来源引用的视频报告。
+    </p>
+    <section class="card" aria-labelledby="url-label">
+      <div class="settings-toolbar">
+        <div class="model-summary" role="status"><span class="connection-dot" data-state="pending" aria-hidden="true"></span><span id="model-summary" class="model-summary-text">正在读取模型…</span></div>
+      <button id="settings-open" class="settings-button" type="button" aria-haspopup="dialog"
+              aria-controls="advanced-settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1
+                   a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21
+                   a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1
+                   a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3
+                   a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1
+                   a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3
+                   a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1
+                   a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21
+                   a1.7 1.7 0 0 0-1.6 1Z"></path>
+        </svg>
+        高级设置
+      </button>
+      </div>
+      <label id="url-label" for="url">Bilibili 视频链接或 BV 号</label>
+      <input id="url" name="url" type="text"
+             placeholder="粘贴视频链接或 BV 号" autocomplete="off">
+      <div id="source-info" class="source-info" aria-live="polite">
+        支持公开视频链接或完整 BV 号；BV 号默认使用 P1。
+      </div>
+      <button id="generate" type="button">生成 Visual Report</button>
+      <div class="status" aria-live="polite" aria-atomic="true" aria-busy="false">
+        <div class="status-title">
+          <span id="status-label" class="status-label">尚未开始</span>
+          <span id="status-code" class="status-code">准备就绪</span>
+        </div>
+        <p id="status-detail" class="status-detail">粘贴视频链接后，点击上方按钮开始生成。</p>
+        <p id="elapsed" class="status-detail elapsed" hidden>用时：0 分 0 秒</p>
+        <div id="progress" role="progressbar" aria-label="报告生成进度"
+             aria-valuemin="0" aria-valuemax="4" aria-valuenow="0">
+          <div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div>
+          <ol class="progress-steps">
+            <li class="progress-step" data-step="1"><span class="step-dot"></span>下载视频</li>
+            <li class="progress-step" data-step="2"><span class="step-dot"></span>生成文字稿</li>
+            <li class="progress-step" data-step="3"><span class="step-dot"></span>理解内容</li>
+            <li class="progress-step" data-step="4"><span class="step-dot"></span>生成报告</li>
+          </ol>
+        </div>
+        <a id="report-link" class="report-link" href="#" target="_blank"
+           rel="noreferrer" hidden>查看生成的报告</a>
+      </div>
+      <button id="history-open" class="history-button" type="button">查看历史报告</button>
+    </section>
+    <dialog id="model-dialog" class="settings-dialog" aria-labelledby="model-title">
+      <form id="model-form" class="settings-panel">
+        <div class="settings-header">
+          <h2 id="model-title">添加模型</h2>
+          <button id="model-close" class="dialog-close" type="button" aria-label="关闭模型配置">×</button>
+        </div>
+        <p class="settings-copy">配置保存在本机项目中。API Key 保存后不再回显。</p>
+        <label for="model-kind">配置方式</label>
+        <select id="model-kind"><option value="builtin">Pi 已有 Provider</option><option value="custom">自定义 · OpenAI 格式</option></select>
+        <div id="builtin-fields">
+          <div class="field-group"><label for="new-provider">Provider</label><select id="new-provider" required></select></div>
+          <div class="field-group"><label for="builtin-model">具体模型</label><select id="builtin-model" required></select></div>
+        </div>
+        <div id="custom-fields" hidden>
+          <div class="field-group"><label for="custom-name">显示名称</label><input id="custom-name" placeholder="例如：我的模型" disabled></div>
+          <div class="field-group"><label for="custom-url">API URL</label><input id="custom-url" type="url" placeholder="https://api.example.com/v1" disabled></div>
+          <div class="field-group"><label for="custom-model">具体模型 ID</label><input id="custom-model" placeholder="服务商提供的模型 ID" disabled></div>
+          <p class="settings-copy">使用 OpenAI Chat Completions 格式，URL 填写接口根地址。</p>
+          <label for="custom-reasoning"><input id="custom-reasoning" type="checkbox" disabled> 此模型支持思考强度（reasoning_effort）</label>
+        </div>
+        <div class="field-group"><label for="new-api-key">API Key</label><input id="new-api-key" type="password" autocomplete="new-password" required></div>
+        <p id="model-save-error" class="model-error" role="alert"></p>
+        <button id="model-save" type="submit">保存并选择</button>
+      </form>
+    </dialog>
+    <dialog id="advanced-settings" class="settings-dialog" aria-labelledby="settings-title">
+      <div class="settings-panel">
+        <div class="settings-header">
+          <div>
+            <h2 id="settings-title">高级设置</h2>
+
+          </div>
+          <button id="settings-close" class="dialog-close" type="button"
+                  aria-label="关闭高级设置">×</button>
+        </div>
+      <section class="settings-section" aria-label="模型设置">
+      <div class="model-row">
+        <div><label for="report-model">报告模型</label><select id="report-model" disabled><option>正在读取模型…</option></select></div>
+        <div><label for="model-thinking">思考强度</label><select id="model-thinking" disabled><option>默认</option></select></div>
+      </div>
+      <p id="model-load-error" class="model-error" role="status"></p>
+        <div class="connection-info" role="status"><span class="connection-dot" data-state="pending" aria-hidden="true"></span><span id="connection-detail">尚未检测</span></div>
+      </section>
+      <section class="settings-section" aria-label="文字稿识别设置">
+      <label for="transcript-mode">文字稿模式</label>
+      <select id="transcript-mode"><option value="asr-only" selected>ASR only（快速）</option>
+        <option value="fused">Fusion（字幕 / OCR 增强）</option></select>
+      <div class="field-group">
+      <label for="ocr-mode">字幕 OCR 模式</label>
+      <select id="ocr-mode" name="ocr_mode">
+        <option value="auto">Auto ROI（不稳定时自动降级）</option>
+        <option value="roi">显式 ROI（可靠主路径）</option>
+        <option value="off" selected>关闭 OCR</option>
+      </select>
+      <div class="source-info">
+        启用 OCR 可提高字幕识别准确率，但会延长报告生成时间。
+      </div>
+      </div>
+      <div id="ocr-roi-field" class="field-group" hidden>
+        <label for="ocr-roi">显式 ROI（x1,y1,x2,y2）</label>
+        <input id="ocr-roi" name="ocr_roi" inputmode="decimal" placeholder="0.05,0.72,0.95,0.98">
+      </div>
+      </section>
+      <section class="settings-section" aria-label="字幕导入">
+        <label for="subtitle-file">导入字幕文件</label>
+        <p class="settings-copy">如有本地字幕，可在这里导入。系统支持 SRT、VTT 和 ASS。</p>
+        <input id="subtitle-file" name="subtitle_file" type="file" accept=".srt,.vtt,.ass">
+        <p id="subtitle-status" class="file-status">未选择文件</p>
+      </section>
+      </div>
+    </dialog>
+    <dialog id="history-dialog" class="settings-dialog" aria-labelledby="history-title">
+      <div class="settings-panel">
+        <div class="settings-header">
+          <div>
+            <h2 id="history-title">历史报告</h2>
+            <p class="settings-copy">这里汇总当前服务已经生成完成的视频报告。</p>
+          </div>
+          <button id="history-close" class="dialog-close" type="button"
+                  aria-label="关闭历史报告">×</button>
+        </div>
+        <div id="history-list" class="history-list" aria-live="polite">
+          <p class="history-empty">正在读取历史报告…</p>
+        </div>
+      </div>
+    </dialog>
+  </main>
+  <div id="connection-toast" class="connection-toast" role="alert" hidden></div>
+  <script>
+    (() => {
+      const url = document.querySelector('#url');
+      const generate = document.querySelector('#generate');
+      const statusBox = document.querySelector('.status');
+      const statusLabel = document.querySelector('#status-label');
+      const statusCode = document.querySelector('#status-code');
+      const statusDetail = document.querySelector('#status-detail');
+      const progress = document.querySelector('#progress');
+      const progressFill = document.querySelector('#progress-fill');
+      const progressSteps = [...document.querySelectorAll('.progress-step')];
+      const reportLink = document.querySelector('#report-link');
+      const transcriptMode = document.querySelector('#transcript-mode');
+      const ocrMode = document.querySelector('#ocr-mode');
+      const ocrRoiField = document.querySelector('#ocr-roi-field');
+      const ocrRoi = document.querySelector('#ocr-roi');
+      const subtitleFile = document.querySelector('#subtitle-file');
+      const subtitleStatus = document.querySelector('#subtitle-status');
+      const settingsDialog = document.querySelector('#advanced-settings');
+      const settingsOpen = document.querySelector('#settings-open');
+      const settingsClose = document.querySelector('#settings-close');
+      const historyDialog = document.querySelector('#history-dialog');
+      const historyOpen = document.querySelector('#history-open');
+      const historyClose = document.querySelector('#history-close');
+      const historyList = document.querySelector('#history-list');
+      const modelSelect = document.querySelector('#report-model');
+      const thinkingSelect = document.querySelector('#model-thinking');
+      const modelDialog = document.querySelector('#model-dialog');
+      const modelForm = document.querySelector('#model-form');
+      const modelKind = document.querySelector('#model-kind');
+      const providerSelect = document.querySelector('#new-provider');
+      const builtinModel = document.querySelector('#builtin-model');
+      const keyInput = document.querySelector('#new-api-key');
+      const saveButton = document.querySelector('#model-save');
+      const loadError = document.querySelector('#model-load-error');
+      const saveError = document.querySelector('#model-save-error');
+      const summary = document.querySelector('#model-summary');
+      const connectionDetail = document.querySelector('#connection-detail');
+      const toast = document.querySelector('#connection-toast');
+      const elapsed = document.querySelector('#elapsed');
+      let checkVersion = 0;
+      let toastTimeout;
+      let timerInterval;
+      function updateSummary(state = 'pending') {
+        const model = modelCatalog.find(m => modelId(m) === modelSelect.value);
+        const effort = thinkingSelect.value;
+        summary.textContent = model ? `${model.name} ${effort.charAt(0).toUpperCase() + effort.slice(1)}` : '未选择模型';
+        const message = { pending: '正在检测连接…', connected: '已连接', failed: '未能连接模型服务' }[state];
+        summary.parentElement.title = message;
+        summary.parentElement.setAttribute('aria-label', `${summary.textContent}，${message}`);
+        connectionDetail.textContent = message;
+        document.querySelectorAll('.connection-dot').forEach(dot => { dot.dataset.state = state; });
+      }
+      async function checkConnection() {
+        const model = modelCatalog.find(m => modelId(m) === modelSelect.value);
+        const version = ++checkVersion;
+        clearTimeout(toastTimeout);
+        toast.hidden = true;
+        updateSummary();
+        if (!model) return;
+        try {
+          const response = await fetch('/api/models/check', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider: model.provider, model: model.model, thinking: thinkingSelect.value }) });
+          const data = await response.json();
+          if (!response.ok || !data.connected) throw new Error(data.error || '未能连接模型服务');
+          if (version === checkVersion) updateSummary('connected');
+        } catch {
+          if (version !== checkVersion) return;
+          updateSummary('failed');
+          toast.textContent = '未能连接模型服务，请检查 API Key、服务地址及模型权限后重试。';
+          // Put the notification in the active dialog so it remains above the modal backdrop.
+          (modelDialog.open ? modelDialog : settingsDialog.open ? settingsDialog : document.body).append(toast);
+          toast.hidden = false;
+          toastTimeout = setTimeout(() => { toast.hidden = true; }, 6000);
+        }
+      }
+      function updateTimer(data) {
+        clearInterval(timerInterval);
+        elapsed.hidden = !Number.isFinite(data.started_at);
+        if (elapsed.hidden) return;
+        const terminal = ['RENDERED', 'FAILED', 'CANCELLED'].includes(data.state);
+        const end = data.finished_at || (terminal ? Date.now() / 1000 : null);
+        const draw = () => {
+          const seconds = Math.max(0, Math.floor((end || Date.now() / 1000) - data.started_at));
+          elapsed.textContent = `用时：${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`;
+        };
+        draw();
+        if (!terminal) timerInterval = setInterval(draw, 1000);
+      }
+      let modelCatalog = [];
+      let selectedModel = '';
+      const modelId = m => JSON.stringify([m.provider, m.model]);
+      const thinkingLabels = { off: '关闭', minimal: '最小', low: '低', medium: '中', high: '高', xhigh: '超高', max: '最高' };
+      function updateThinking() {
+        const model = modelCatalog.find(m => modelId(m) === modelSelect.value);
+        const previous = thinkingSelect.value;
+        thinkingSelect.replaceChildren(...(model?.thinking_levels || []).map(level => new Option(thinkingLabels[level] || level, level)));
+        if (model?.thinking_levels.includes(previous)) thinkingSelect.value = previous;
+        else if (model?.thinking_levels.includes('medium')) thinkingSelect.value = 'medium';
+        thinkingSelect.disabled = !model || model.thinking_levels.length < 2;
+      }
+      async function loadModels(preferred) {
+        const response = await fetch('/api/models');
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || '模型读取失败，请刷新重试。');
+        modelCatalog = data.models;
+        const configured = modelCatalog.filter(m => m.configured);
+        modelSelect.replaceChildren(...configured.map(m => new Option(`${m.name} · ${m.provider}`, modelId(m))));
+        modelSelect.add(new Option('＋ 添加模型…', 'add'));
+        const desired = preferred ? modelId(preferred) : selectedModel || modelId(data.default);
+        modelSelect.value = configured.some(m => modelId(m) === desired) ? desired : configured.length ? modelId(configured[0]) : 'add';
+        selectedModel = modelSelect.value;
+        modelSelect.disabled = false;
+        updateThinking();
+        const providers = [...new Set(modelCatalog.filter(m => m.supports_api_key).map(m => m.provider).filter(p => !p.startsWith('custom-')))];
+        providerSelect.replaceChildren(...providers.sort().map(p => new Option(p, p)));
+        if (providers.includes('openai')) providerSelect.value = 'openai';
+        updateProviderModels();
+        loadError.textContent = '';
+        checkConnection();
+      }
+      function updateProviderModels() {
+        builtinModel.replaceChildren(...modelCatalog.filter(m => m.provider === providerSelect.value).map(m => new Option(`${m.name} (${m.model})`, m.model)));
+      }
+      modelSelect.addEventListener('change', () => {
+        if (modelSelect.value === 'add') {
+          modelSelect.value = selectedModel;
+          saveError.textContent = '';
+          modelDialog.showModal();
+        } else { selectedModel = modelSelect.value; updateThinking(); checkConnection(); }
+      });
+      thinkingSelect.addEventListener('change', checkConnection);
+      providerSelect.addEventListener('change', updateProviderModels);
+      modelKind.addEventListener('change', () => {
+        const custom = modelKind.value === 'custom';
+        document.querySelector('#builtin-fields').hidden = custom;
+        document.querySelector('#custom-fields').hidden = !custom;
+        providerSelect.disabled = builtinModel.disabled = custom;
+        document.querySelectorAll('#custom-fields input').forEach(input => {
+          input.disabled = !custom;
+          input.required = custom && input.type !== 'checkbox';
+        });
+      });
+      document.querySelector('#model-close').addEventListener('click', () => modelDialog.close());
+      modelDialog.addEventListener('close', () => { keyInput.value = ''; (settingsDialog.open ? settingsDialog : document.body).append(toast); });
+      modelForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        saveButton.disabled = true;
+        saveButton.textContent = '正在保存…';
+        saveError.textContent = '';
+        try {
+          const response = await fetch('/api/models', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+            kind: modelKind.value, provider: providerSelect.value,
+            model: modelKind.value === 'custom' ? document.querySelector('#custom-model').value.trim() : builtinModel.value,
+            name: document.querySelector('#custom-name').value.trim(), url: document.querySelector('#custom-url').value.trim(),
+            reasoning: document.querySelector('#custom-reasoning').checked, api_key: keyInput.value.trim()
+          }) });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || '保存失败，请重试。');
+          keyInput.value = '';
+          await loadModels(data);
+          modelDialog.close();
+        } catch (error) { saveError.textContent = error.message; }
+        finally { saveButton.disabled = false; saveButton.textContent = '保存并选择'; }
+      });
+      loadModels().catch(error => { loadError.textContent = error.message; });
+      const labels = {
+        GENERATING: '正在生成报告', QUEUED: '等待处理',
+        DOWNLOADING: '正在下载视频', TRANSCRIBING: '正在生成文字稿', OCR: '正在识别字幕',
+        FUSING: '正在融合文字稿', READY: '已完成', DEGRADED: '文字稿已降级但可继续',
+        RENDERED: '报告已生成', FAILED: '运行失败', CANCELLED: '运行已取消'
+      };
+      let currentRunId = null;
+      let polling = false;
+
+      function updateOcrFields() {
+        ocrMode.disabled = transcriptMode.value !== 'fused';
+        const showRoi = transcriptMode.value === 'fused' && ocrMode.value === 'roi';
+        ocrRoiField.hidden = !showRoi;
+        ocrRoi.required = showRoi;
+      }
+
+      function updateSubtitleStatus() {
+        subtitleStatus.textContent = subtitleFile.files.length ?
+          `已选择：${subtitleFile.files[0].name}` : '未选择文件';
+      }
+
+      function updateProgress(displayStage, state) {
+        const stepByStage = {
+          GENERATING: 3, QUEUED: 0, DOWNLOADING: 1, TRANSCRIBING: 2, OCR: 2, FUSING: 2,
+          DEGRADED: 2, READY: 4, CREATED: 1,
+          RENDERED: 4
+        };
+        const step = stepByStage[displayStage] || 0;
+        const completed = state === 'RENDERED' ? 4 : Math.max(0, step - 1);
+        progress.setAttribute('aria-valuenow', String(state === 'RENDERED' ? 4 : step));
+        const progressPercent = state === 'RENDERED' ? 100 :
+          completed * 25 + (step ? 12.5 : 0);
+        progressFill.style.width = `${progressPercent}%`;
+        for (const item of progressSteps) {
+          const itemStep = Number(item.dataset.step);
+          item.classList.toggle('is-complete', itemStep <= completed);
+          item.classList.toggle('is-current', itemStep === step && state !== 'RENDERED');
+        }
+      }
+
+      function showStatus(data) {
+        updateTimer(data);
+        const displayStage = data.stage || data.state || 'UNKNOWN';
+        statusLabel.textContent = labels[displayStage] || '状态更新';
+        statusCode.textContent = displayStage;
+        statusBox.dataset.state = data.state || displayStage;
+        updateProgress(displayStage, data.state || displayStage);
+        const step = Number(progress.getAttribute('aria-valuenow'));
+        const queued = displayStage === 'QUEUED';
+        statusCode.textContent = data.state === 'RENDERED' ? '已完成' :
+          (queued ? `排队第 ${data.queue_position || 1} 位` : `第 ${step || 1}/4 步`);
+        statusDetail.textContent = queued ?
+          `当前正在处理任务 ${data.active_run_id || '未知'}；` +
+          `前面还有 ${data.queue_position || 1} 个任务。完成后会自动开始。` :
+          ((data.state === 'RENDERED' ? '报告已经生成，可以立即查看。' :
+            '') +
+          (data.error_category ? ` 错误类别：${data.error_category}。${data.error || ''}` : ''));
+        statusDetail.hidden = !statusDetail.textContent;
+        reportLink.hidden = !data.report_url;
+        if (data.report_url) reportLink.href = data.report_url;
+        const terminal = ['RENDERED', 'FAILED', 'CANCELLED'].includes(data.state);
+        statusBox.setAttribute('aria-busy', !terminal);
+        generate.disabled = !terminal;
+        if (terminal) {
+          generate.disabled = false;
+          polling = false;
+        }
+      }
+
+      async function pollRun() {
+        if (!currentRunId || polling) return;
+        polling = true;
+        try {
+          const response = await fetch(
+            `/api/visual-report/runs/${encodeURIComponent(currentRunId)}`,
+            { headers: { 'Accept': 'application/json' } }
+          );
+          if (!response.ok) throw new Error('run_unavailable');
+          const data = await response.json();
+          showStatus(data);
+          if (!['RENDERED', 'FAILED', 'CANCELLED'].includes(data.state)) {
+            polling = false;
+            window.setTimeout(pollRun, 500);
+          }
+        } catch (error) {
+          polling = false;
+          statusLabel.textContent = '状态暂时不可用';
+          statusCode.textContent = 'WEB_ERROR';
+          statusDetail.hidden = false;
+          statusDetail.textContent = '请保留当前页面并稍后重试。';
+          generate.disabled = false;
+        }
+      }
+
+      async function restoreSharedRun() {
+        try {
+          const response = await fetch('/api/visual-report/current', {
+            headers: { 'Accept': 'application/json' }
+          });
+          if (!response.ok) return;
+          const data = await response.json();
+          if (!data.run) return;
+          currentRunId = data.run.run_id;
+          showStatus(data.run);
+          if (!['RENDERED', 'FAILED', 'CANCELLED'].includes(data.run.state)) {
+            polling = false;
+            pollRun();
+          }
+        } catch (error) {
+          return;
+        }
+      }
+
+      async function showHistory() {
+        historyDialog.showModal();
+        historyList.innerHTML = '<p class="history-empty">正在读取历史报告…</p>';
+        try {
+          const response = await fetch('/api/visual-report/reports', {
+            headers: { 'Accept': 'application/json' }
+          });
+          if (!response.ok) throw new Error('history_unavailable');
+          const data = await response.json();
+          if (!data.reports.length) {
+            historyList.innerHTML = '<p class="history-empty">还没有生成完成的报告。</p>';
+            return;
+          }
+          historyList.replaceChildren(...data.reports.map((report) => {
+            const item = document.createElement('article');
+            item.className = 'history-item';
+            const copy = document.createElement('div');
+            const title = document.createElement('p');
+            title.className = 'history-title';
+            title.textContent = report.title;
+            const meta = document.createElement('p');
+            meta.className = 'history-meta';
+            meta.textContent = report.video_id;
+            copy.append(title, meta);
+            const link = document.createElement('a');
+            link.className = 'history-link';
+            link.href = report.report_url;
+            link.target = '_blank';
+            link.rel = 'noreferrer';
+            link.textContent = '打开报告';
+            item.append(copy, link);
+            return item;
+          }));
+        } catch (error) {
+          historyList.innerHTML = '<p class="history-empty">历史报告暂时无法读取。</p>';
+        }
+      }
+
+      async function generateReport() {
+        const submittedUrl = url.value.trim();
+        if (generate.disabled || !submittedUrl) return;
+        const model = modelCatalog.find(m => modelId(m) === modelSelect.value);
+        if (!model) { loadError.textContent = '请先配置并选择报告模型。'; return; }
+        const selectedSubtitle = subtitleFile.files[0] || null;
+        const subtitleContent = selectedSubtitle ? await selectedSubtitle.text() : null;
+        generate.disabled = true;
+        reportLink.hidden = true;
+        try {
+          const response = await fetch('/api/visual-report/runs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({
+              url: submittedUrl,
+              provider: model.provider, model: model.model, thinking: thinkingSelect.value,
+              transcript_mode: transcriptMode.value,
+              ocr_mode: ocrMode.value,
+              ocr_roi: ocrRoi.value.trim() || null,
+              subtitle_name: selectedSubtitle ? selectedSubtitle.name : null,
+              subtitle_content: subtitleContent
+            })
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || data.error_category || 'run_rejected');
+          currentRunId = data.run_id;
+          showStatus(data);
+          polling = false;
+          pollRun();
+        } catch (error) {
+          statusLabel.textContent = '无法开始运行';
+          statusCode.textContent = String(error.message || 'REQUEST_ERROR');
+          statusDetail.hidden = false;
+          statusDetail.textContent = '请检查 URL 或运行状态后重试。';
+          generate.disabled = false;
+        }
+      }
+
+      transcriptMode.addEventListener('change', updateOcrFields);
+      ocrMode.addEventListener('change', updateOcrFields);
+      subtitleFile.addEventListener('change', updateSubtitleStatus);
+      settingsOpen.addEventListener('click', () => settingsDialog.showModal());
+      settingsClose.addEventListener('click', () => settingsDialog.close());
+      settingsDialog.addEventListener('close', () => { document.body.append(toast); });
+      settingsDialog.addEventListener('click', (event) => {
+        if (event.target === settingsDialog) settingsDialog.close();
+      });
+      historyOpen.addEventListener('click', showHistory);
+      historyClose.addEventListener('click', () => historyDialog.close());
+      historyDialog.addEventListener('click', (event) => {
+        if (event.target === historyDialog) historyDialog.close();
+      });
+      updateOcrFields();
+      generate.addEventListener('click', generateReport);
+      url.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') generateReport();
+      });
+      const initialRunId = new URLSearchParams(window.location.search).get('run_id');
+      if (initialRunId) { currentRunId = initialRunId; pollRun(); }
+      else { restoreSharedRun(); }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "providers": {
+    "zhipu": {
+      "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+      "api": "openai-completions",
+      "apiKey": "$PI_API_KEY",
+      "compat": {
+        "supportsStore": false,
+        "supportsDeveloperRole": false,
+        "maxTokensField": "max_tokens"
+      },
+      "models": [
+        {
+          "id": "glm-5.3-flash",
+          "name": "GLM-5.3 Flash",
+          "input": [
+            "text"
+          ],
+          "reasoning": true,
+          "maxTokens": 65536
+        }
+      ]
+    }
+  }
+}

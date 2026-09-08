@@ -1,0 +1,23 @@
+.venv/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+artifacts/
+*.mp4
+*.m4v
+*.mov
+*.wav
+models/
+
+runs/
+.DS_Store
+:memory:.ses
+Archify/
+
+# Pi project credentials and runtime state
+config/pi/*
+!config/pi/models.json
