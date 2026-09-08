@@ -2,49 +2,197 @@
 
 [简体中文](README.zh-CN.md) | English
 
-Local product: Bilibili URL → yt-dlp → FFmpeg → MLX Whisper → Canonical Transcript → transcript.md → Pi RPC → DeepSeek + video-report skill → report.html.
+Turn a public Bilibili video into a self-contained HTML reading report on Apple Silicon macOS.
 
-## Run
+> `Bilibili URL → yt-dlp → FFmpeg → MLX Whisper → Canonical Transcript → Pi RPC → report.html`
 
-Requires Apple Silicon macOS (MLX), Python 3.12, FFmpeg/FFprobe on PATH and Pi 0.85.0 on PATH. The ASR model is `mlx-community/whisper-large-v3-turbo`; the first run may download it.
+## At a glance
+
+| | Current behavior |
+| --- | --- |
+| Input | A public HTTPS Bilibili video URL or a full BV number. `?p=2` selects a page in a multi-page video. |
+| Default path | ASR-only transcription with OCR disabled. |
+| Optional path | Subtitle discovery/import plus conservative local OCR and Fusion. |
+| Output | A timestamped transcript, provenance artifacts, and a self-contained `report.html`. |
+| Runtime | Local macOS tool; one worker processes runs sequentially. |
+| Report model | Pi RPC calls the provider and model selected in `.env` or the web UI. |
+
+## Quick start
+
+### Requirements
+
+- Apple Silicon macOS, because the default ASR backend uses MLX Whisper.
+- Python 3.12.
+- `ffmpeg` and `ffprobe` available on `PATH`.
+- Pi 0.85.0 available on `PATH`.
+- A configured model provider and credential. The example environment uses DeepSeek.
+
+### Install and configure
 
 ```sh
 uv sync
 cp .env.example .env
-# Set PI_PROVIDER, PI_MODEL and PI_API_KEY. Leave PI_API_KEY empty to use project config/pi/auth.json.
-uv run video-report web --port 8765
-uv run video-report generate 'https://www.bilibili.com/video/BV.../'
 ```
 
-Open http://127.0.0.1:8765. Default transcript mode is `asr-only`, OCR `off`. Optional `fused` preserves subtitle discovery, SRT/VTT/ASS input, RapidOCR PP-OCRv6 Small, conservative Fusion and canonical source provenance. Enable it in the UI or use `generate URL --transcript-mode fused --ocr-mode auto`; explicit ROI uses `--ocr-mode roi --ocr-roi 0.05,0.72,0.95,0.98` (`on` aliases `roi`). `--subtitle-file path.srt` imports a local subtitle. `uv sync --extra enhancement` installs the optional OCR dependencies.
+Set the provider, model, and credential in `.env`:
 
-The existing UI accepts URLs, polls progress, opens reports and lists completed reports. One worker processes runs sequentially. Restarting marks unfinished runs failed; completed reports remain available.
+```dotenv
+PI_PROVIDER=deepseek
+PI_MODEL=deepseek-v4-flash-vision-exp
+PI_API_KEY=your-api-key
+```
 
-`runs/<id>/` contains input.json, downloaded media, audio.wav, raw asr.json, timestamped transcript.md, SKILL.md and assets/report-template.html copied from the formal skill, Pi sessions and event logs, status.json, and report.html. Failed runs remain intact. `--runs PATH` before the command chooses another run root.
-
-Pi is started with `--mode rpc`, the project `PI_PROVIDER` and `PI_MODEL`, and standard `read,write,edit,bash` tools. When `PI_API_KEY` is set, the adapter passes it through `--api-key`; the persisted `invocation.json` contains `[redacted]` instead of the key. When it is empty, Pi can use the selected provider's credential from project `config/pi/auth.json`. `PI_CODING_AGENT_DIR` is always set to the absolute project `config/pi/` path, overriding any machine setting; user-level Pi credentials, models and settings are not loaded. Explicit skill and session paths are used, and automatic extension/context discovery is disabled. The thin invocation points to transcript.md and the skill; it does not embed the skill. The adapter waits for `agent_settled` and a successful final assistant stop, then checks for a complete HTML file. Pi owns retries, compaction and tool execution.
-
-Source skill: `src/video_report_agent/skills/video-report/`, preserved from the manually exercised transcript-report-replica skill (renamed only). Generated reports must be self-contained. The application does not impose a browser hard gate or run a planner/critic pipeline.
-
-Pi's cwd and session directory are inside the run. A system instruction confines work there; standard bash/read/write/edit are **not an OS sandbox** and technically retain host access. Use only as a trusted local tool; container isolation remains future work. Generated HTML is served with a sandbox CSP. Do not publish old research media under artifacts/ or reports/.
-
-Checks: `uv run --extra enhancement pytest -q`, `uv run ruff check src tests`, `uv lock --check`.
-
-## Project Pi configuration
-
-The CLI loads `.env` from the project root; deployment environment variables take precedence. Edit `config/pi/models.json` for custom providers. The included `zhipu/glm-5.2` uses the ordinary BigModel API. Select it with `PI_PROVIDER=zhipu`, `PI_MODEL=glm-5.2`, and your ordinary API key in `PI_API_KEY`. Add other providers with their `baseUrl`, `api`, and `models`; reference secrets as `$ENV_VAR`.
-
-For interactive login, run from the project root:
+`PI_API_KEY` may be left empty when the selected provider is logged in through the project Pi directory. The interactive login command is:
 
 ```sh
 PI_CODING_AGENT_DIR="$PWD/config/pi" pi
-# Use /login inside Pi.
+# Run /login inside Pi.
 ```
 
-Only `config/pi/models.json` is versioned; credentials and Pi runtime state are ignored. Deploy this config with the project and supply credentials through environment variables or project login. The Pi executable must still be installed. Report workspaces remain `runs/<id>/`.
+### Start the web UI
 
-## Media retention
+```sh
+uv run video-report web --port 8765
+```
 
-By default, keep media for the latest 20 successful runs, ordered by completion (`status.json` modification time). Repeated videos count as separate runs. Cleanup runs on web startup and after each generation, removing only downloaded MP4 files and `audio.wav`. Reports, assets, transcripts, subtitles, metadata and logs remain; failed and active runs are untouched. Removed videos must be downloaded again for later runs.
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765), paste a public Bilibili URL or BV number, and click **生成 Visual Report**. The UI shows progress, lets you select the report model, and keeps a history of completed reports.
 
-Set `MEDIA_KEEP_LAST=10` for ten runs, or `MEDIA_KEEP_LAST=0` and `MEDIA_MAX_AGE_DAYS=7` for seven days. Zero disables a limit; if both are enabled, either limit expires media. Cleanup does not run while the application is stopped. Preserved reports and failed runs still consume storage.
+### Run from the CLI
+
+```sh
+uv run video-report generate \
+  'https://www.bilibili.com/video/BV...' \
+  --transcript-mode asr-only
+```
+
+The command prints the run status as JSON. The generated report is stored at `runs/<run-id>/report.html`.
+
+Use a separate run root by placing the global option before the subcommand:
+
+```sh
+uv run video-report --runs /path/to/runs generate 'https://www.bilibili.com/video/BV...'
+```
+
+The first run may download `mlx-community/whisper-large-v3-turbo`.
+
+## Transcript modes
+
+The canonical transcript is the boundary between media processing and report generation. Pi receives the same `transcript.md` projection regardless of the selected mode.
+
+| Mode | What it does | When to use it |
+| --- | --- | --- |
+| `asr-only` | Generates the transcript from MLX Whisper. OCR is off and no subtitle lookup is performed. | Fast default path and baseline checks. |
+| `fused` | Keeps ASR as the timeline anchor, then optionally discovers subtitles, imports a local subtitle file, samples local OCR, and records source provenance. Optional-source failures are retained as warnings. | When on-screen subtitles or an existing subtitle track can improve the transcript. |
+
+The CLI examples below use Fusion explicitly:
+
+```sh
+# Subtitle discovery and automatic OCR ROI detection.
+uv run video-report generate 'https://www.bilibili.com/video/BV...' \
+  --transcript-mode fused \
+  --ocr-mode auto
+
+# A known subtitle area, expressed as normalized x1,y1,x2,y2 coordinates.
+uv run video-report generate 'https://www.bilibili.com/video/BV...' \
+  --transcript-mode fused \
+  --ocr-mode roi \
+  --ocr-roi 0.05,0.72,0.95,0.98
+
+# Import a local SRT, VTT, or ASS subtitle file.
+uv run video-report generate 'https://www.bilibili.com/video/BV...' \
+  --transcript-mode fused \
+  --subtitle-file ./captions.srt
+```
+
+OCR modes are:
+
+- `off`: no OCR; this is the default.
+- `auto`: detect a stable subtitle region and fall back when the region is unstable.
+- `roi`: use the explicit `--ocr-roi` rectangle. CLI `on` is accepted as an alias for `roi`.
+
+The web UI exposes the same transcript, OCR, and subtitle settings under **高级设置**. OCR is only used when `fused` is selected. The optional enhancement dependencies are installed with:
+
+```sh
+uv sync --extra enhancement
+```
+
+## How the pipeline works
+
+```mermaid
+flowchart LR
+    A[Public Bilibili URL] --> B[yt-dlp download]
+    B --> C[FFmpeg audio extraction]
+    C --> D[MLX Whisper]
+    D --> E[Canonical Transcript]
+    E --> F[Pi RPC + video-report skill]
+    F --> G[Self-contained report.html]
+```
+
+Each run has its own workspace under `runs/<run-id>/`. The adapter copies the report skill and its assets into that workspace, starts Pi with `--mode rpc`, and points Pi at the run-local transcript. It waits for `agent_settled`, verifies a normal final assistant stop, and checks that `report.html` is a complete HTML document.
+
+Pi owns the agent loop, tool execution, retries, and compaction. This product does not add a planner, critic, revision workflow, or multi-agent orchestration. A browser hard gate is not part of the generation path.
+
+## Run artifacts
+
+Important files in a completed run look like this:
+
+```text
+runs/<run-id>/
+├── input.json
+├── status.json
+├── download/
+│   ├── source.<ext>
+│   └── source.info.json
+├── audio.wav
+├── asr.json
+├── transcript.md
+├── canonical-transcript.jsonl
+├── transcript-manifest.json
+├── SKILL.md
+├── assets/
+├── sessions/
+├── invocation.json
+├── pi.events.jsonl
+├── pi.stderr.log
+└── report.html
+```
+
+Fusion runs may also contain downloaded or imported subtitles, `subtitle-ocr-events.jsonl`, OCR frame candidates, and related diagnostic files. Failed runs retain their files and add `failure.log`; they are not silently replaced by a successful result.
+
+## Model and project configuration
+
+- The CLI loads `.env` from the project root. Environment variables already present in the process take precedence.
+- `PI_PROVIDER`, `PI_MODEL`, and `PI_API_KEY` select the report model. The web UI can select a configured Pi model or save a custom OpenAI-compatible provider.
+- `config/pi/models.json` is versioned project configuration. Credentials and Pi runtime state stay outside Git.
+- Report runs always set `PI_CODING_AGENT_DIR` to the project `config/pi/` directory, so user-level Pi credentials, models, and settings are not loaded accidentally.
+- The project-level Pi executable is still an external prerequisite. `uv sync` does not install Pi.
+
+## Storage and media retention
+
+Cleanup runs when the web server starts and after each generation. It only removes downloaded MP4 files and `audio.wav` from successful runs.
+
+| Variable | Default | Meaning |
+| --- | ---: | --- |
+| `MEDIA_KEEP_LAST` | `20` | Keep media for the latest 20 successful runs. |
+| `MEDIA_MAX_AGE_DAYS` | `0` | Disable age-based cleanup. Set a positive value to remove older media. |
+
+Set either limit to `0` to disable that limit. When both limits are enabled, media is removed as soon as either limit expires. Reports, transcripts, subtitles, metadata, assets, and logs remain. Failed and active runs are untouched, and cleanup does not run while the service is stopped.
+
+## Local-tool boundaries
+
+- Ingestion accepts public HTTPS Bilibili URLs only; it does not implement login or private-video access.
+- The default transcription path requires Apple Silicon macOS. A Linux deployment would need another transcription backend.
+- Downloading, audio extraction, and ASR happen locally. The selected model provider receives the data needed for report generation, so choose a provider appropriate for the source material.
+- Pi runs with standard `read`, `write`, `edit`, and `bash` tools inside the run directory. The system prompt narrows its intended scope, but these tools are not an operating-system sandbox and technically retain host access.
+- Restarting the web service marks unfinished runs as failed. Completed reports remain available under the run root.
+- Generated HTML is served with a sandbox CSP. The application does not claim deployment-grade isolation.
+
+## Development checks
+
+```sh
+uv run --extra enhancement pytest -q
+uv run ruff check src tests
+uv lock --check
+```
+
+The source skill that defines the report-writing behavior is [`src/video_report_agent/skills/video-report/SKILL.md`](src/video_report_agent/skills/video-report/SKILL.md).
