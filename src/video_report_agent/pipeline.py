@@ -10,9 +10,11 @@ import traceback
 import uuid
 from pathlib import Path
 
-from .asr import DEFAULT_ASR_MODEL, AsrError, transcribe_audio
+from .asr import AsrError, transcribe_audio
 from .audio import AudioExtractionError, extract_audio
 from .ingest import UrlIngestError, download_bilibili_video, validate_bilibili_url
+from .media_config import resolve_media_config
+from .paraformer import CloudAsrError
 from .pi import PiError, PiRunner
 from .retention import cleanup_media
 from .reuse import reuse_download, reuse_transcript
@@ -35,6 +37,9 @@ def create_run(
     ocr_roi=None,
     subtitle_file=None,
     model_selection=None,
+    asr_backend=None,
+    asr_model=None,
+    ocr_backend=None,
 ) -> Path:
     if transcript_mode not in {"asr-only", "fused"}:
         raise ValueError("transcript_mode must be asr-only or fused")
@@ -44,6 +49,7 @@ def create_run(
         raise ValueError("ocr_mode must be off, auto or roi")
     if transcript_mode == "fused" and ocr_mode == "roi":
         parse_roi(ocr_roi)
+    media_config = resolve_media_config(asr_backend, asr_model, ocr_backend)
     source = validate_bilibili_url(url)
     run = root.resolve() / uuid.uuid4().hex
     run.mkdir(parents=True)
@@ -51,6 +57,7 @@ def create_run(
         run / "input.json",
         {
             **({"model_selection": model_selection} if model_selection else {}),
+            **media_config,
             "url": source.canonical_url,
             "video_id": source.video_id,
             "transcript_mode": transcript_mode,
@@ -59,9 +66,15 @@ def create_run(
             "subtitle_file": "subtitle" + Path(subtitle_file).suffix if subtitle_file else None,
         },
     )
-    write_json(run / "status.json", {
-        "run_id": run.name, "state": "QUEUED", "stage": "QUEUED", "started_at": time.time(),
-    })
+    write_json(
+        run / "status.json",
+        {
+            "run_id": run.name,
+            "state": "QUEUED",
+            "stage": "QUEUED",
+            "started_at": time.time(),
+        },
+    )
     if subtitle_file:
         import shutil
 
@@ -69,7 +82,7 @@ def create_run(
     return run
 
 
-def generate(run: Path, *, asr_model: str = DEFAULT_ASR_MODEL) -> dict:
+def generate(run: Path) -> dict:
     metadata = json.loads((run / "input.json").read_text())
     status = json.loads((run / "status.json").read_text())
     status.update(video_id=metadata["video_id"])
@@ -100,7 +113,6 @@ def generate(run: Path, *, asr_model: str = DEFAULT_ASR_MODEL) -> dict:
             title=downloaded.title,
             uploader=downloaded.uploader,
             attribution=downloaded.attribution,
-            asr_model=asr_model,
         )
         write_json(run / "input.json", metadata)
         transcript_source = reuse_transcript(run, metadata)
@@ -108,12 +120,20 @@ def generate(run: Path, *, asr_model: str = DEFAULT_ASR_MODEL) -> dict:
         if transcript_source is None:
             update("TRANSCRIBING", title=downloaded.title)
             audio = extract_audio(downloaded.media_path, run / "audio.wav")
-            asr = transcribe_audio(audio.path, model=asr_model)
+            asr = transcribe_audio(
+                audio.path,
+                model=metadata["asr_model"],
+                backend=metadata["asr_backend"],
+                base_url=metadata["asr_base_url"],
+                language=metadata["asr_language"],
+                parameters=metadata["asr_parameters"],
+            )
             write_json(run / "asr.json", asr.to_dict())
             options = argparse.Namespace(
                 transcript_mode=metadata.get("transcript_mode", "asr-only"),
                 ocr_mode=metadata.get("ocr_mode", "off"),
                 ocr_roi=metadata.get("ocr_roi"),
+                ocr_backend=metadata["ocr_backend"],
                 subtitle_file=(
                     run / metadata["subtitle_file"] if metadata.get("subtitle_file") else None
                 ),
@@ -136,8 +156,14 @@ def generate(run: Path, *, asr_model: str = DEFAULT_ASR_MODEL) -> dict:
         asyncio.run(PiRunner(**metadata.get("model_selection", {})).run(run))
         update("RENDERED", report_url=f"/reports/{run.name}/report.html")
     except Exception as exc:
-        (run / "failure.log").write_text(traceback.format_exc())
-        if isinstance(exc, PiError):
+        if isinstance(exc, CloudAsrError):
+            write_json(run / "asr-error.json", exc.to_dict())
+            (run / "failure.log").write_text(str(exc))
+        else:
+            (run / "failure.log").write_text(traceback.format_exc())
+        if isinstance(exc, CloudAsrError):
+            category = "EXTERNAL_API_FAILURE"
+        elif isinstance(exc, PiError):
             category = exc.category
         elif isinstance(exc, UrlIngestError):
             category = (

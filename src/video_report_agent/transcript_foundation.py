@@ -66,9 +66,12 @@ class SubtitleParseError(TranscriptFoundationError):
     """Raised for an unsupported or malformed optional subtitle source."""
 
 
-class _OcrAdapter(Protocol):
-    def recognize(self, image_path: Path) -> object:
-        """Return OCR rows for one local image."""
+class OCRBackend(Protocol):
+    provider: str
+    model: str
+
+    def recognize(self, image_path: Path) -> OcrResult:
+        """Return detections in input-image pixel coordinates."""
 
 
 class Stability(BaseModel):
@@ -174,6 +177,13 @@ class OcrDetection:
     text: str
     confidence: float | None
     points: tuple[tuple[float, float], ...] = ()
+
+
+@dataclass(frozen=True)
+class OcrResult:
+    detections: tuple[OcrDetection, ...]
+    provider: str
+    model: str
 
 
 @dataclass(frozen=True)
@@ -455,11 +465,15 @@ def _coerce_detection(row: object) -> OcrDetection | None:
     return OcrDetection(text=text, confidence=score, points=_coerce_points(points))
 
 
-def _recognize(adapter: _OcrAdapter, image_path: Path) -> list[OcrDetection]:
+def _recognize(adapter: OCRBackend, image_path: Path) -> list[OcrDetection]:
     try:
-        result = adapter.recognize(image_path)
+        return list(adapter.recognize(image_path).detections)
     except Exception as exc:
-        raise OcrError(f"local OCR failed: {type(exc).__name__}") from exc
+        raise OcrError(f"OCR failed: {type(exc).__name__}") from exc
+
+
+def normalize_ocr_result(result: object) -> list[OcrDetection]:
+    """Convert RapidOCR output at the provider boundary."""
     if result is None:
         return []
     boxes = getattr(result, "boxes", None)
@@ -483,8 +497,11 @@ def _recognize(adapter: _OcrAdapter, image_path: Path) -> list[OcrDetection]:
     return [detection for detection in detections if detection is not None]
 
 
-class RapidOcrAdapter:
+class RapidOcrBackend:
     """Lazy local RapidOCR adapter; no image or text leaves the process."""
+
+    provider = "rapidocr"
+    model = "PP-OCRv6-small-onnxruntime"
 
     def __init__(self) -> None:
         try:
@@ -511,8 +528,12 @@ class RapidOcrAdapter:
             }
         )
 
-    def recognize(self, image_path: Path) -> object:
-        return self._engine(str(image_path))
+    def recognize(self, image_path: Path) -> OcrResult:
+        return OcrResult(
+            tuple(normalize_ocr_result(self._engine(str(image_path)))),
+            self.provider,
+            self.model,
+        )
 
 
 def _ocr_text(detections: Sequence[OcrDetection]) -> tuple[str, float | None]:
@@ -684,7 +705,7 @@ def extract_subtitle_ocr_events(
     start_ms: int = 0,
     end_ms: int | None = None,
     duration_ms: int | None = None,
-    adapter: _OcrAdapter | None = None,
+    adapter: OCRBackend | None = None,
     runner: Callable[..., Any] | None = None,
     roi_mode: Literal["explicit", "auto"] = "explicit",
 ) -> list[SourceTextEvent]:
@@ -700,7 +721,7 @@ def extract_subtitle_ocr_events(
     coverage_status = (
         "FULL" if start_ms == 0 and processed_end_ms == video_duration_ms else "PARTIAL"
     )
-    active_adapter = adapter or RapidOcrAdapter()
+    active_adapter = adapter or RapidOcrBackend()
     with tempfile.TemporaryDirectory(prefix="visual-report-ocr-") as temporary_root:
         temporary_dir = Path(temporary_root)
         frames = sample_video_frames(
@@ -740,6 +761,8 @@ def extract_subtitle_ocr_events(
                 update={
                     "provenance": {
                         **event.provenance,
+                        "provider": active_adapter.provider,
+                        "model": active_adapter.model,
                         "roi_mode": roi_mode,
                         "processed_start_ms": start_ms,
                         "processed_end_ms": processed_end_ms,
@@ -768,12 +791,12 @@ def detect_auto_roi(
     sample_fps: float = 1.0,
     start_ms: int = 0,
     end_ms: int | None = None,
-    adapter: _OcrAdapter | None = None,
+    adapter: OCRBackend | None = None,
     runner: Callable[..., Any] | None = None,
 ) -> AutoRoiResult:
     """Find one recurring sentence-like horizontal OCR band, if clearly usable."""
 
-    active_adapter = adapter or RapidOcrAdapter()
+    active_adapter = adapter or RapidOcrBackend()
     full_roi = (0.0, 0.0, 1.0, 1.0)
     with tempfile.TemporaryDirectory(prefix="visual-report-auto-roi-") as temporary_root:
         frames = sample_video_frames(
@@ -1154,16 +1177,6 @@ def load_event_jsonl(
     return events
 
 
-def _raw_words(payload: dict[str, Any], ordinal: int) -> list[dict[str, Any]]:
-    raw_result = payload.get("raw_result")
-    raw_segments = raw_result.get("segments") if isinstance(raw_result, dict) else None
-    if not isinstance(raw_segments, list) or not 0 <= ordinal < len(raw_segments):
-        return []
-    raw_segment = raw_segments[ordinal]
-    words = raw_segment.get("words") if isinstance(raw_segment, dict) else None
-    return [word for word in words if isinstance(word, dict)] if isinstance(words, list) else []
-
-
 def asr_events_from_payload(
     payload: dict[str, Any], *, payload_path: Path | None = None
 ) -> list[SourceTextEvent]:
@@ -1185,9 +1198,8 @@ def asr_events_from_payload(
         except (KeyError, TypeError, ValueError) as exc:
             raise TranscriptFoundationError(f"ASR segment {index} is invalid") from exc
         provenance: dict[str, Any] = {"asr_ordinal": ordinal}
+        provenance.update({key: payload.get(key) for key in ("backend", "provider", "model")})
         words = row.get("words")
-        if not isinstance(words, list):
-            words = _raw_words(payload, ordinal)
         if words:
             provenance["word_timestamps"] = words
         if payload_path is not None:
@@ -1602,6 +1614,9 @@ def _build_unit(
     candidate_ids = [event.event_id for event in candidate_events]
     provenance: dict[str, Any] = {
         "asr_event_ids": [asr_event.event_id],
+        "asr_backend": asr_event.provenance.get("backend"),
+        "asr_provider": asr_event.provenance.get("provider"),
+        "asr_model": asr_event.provenance.get("model"),
         "candidate_event_ids": candidate_ids,
         "asr_ordinals": _asr_ordinals(asr_event),
         "canonical_text_source": "asr",
@@ -2023,9 +2038,11 @@ __all__ = [
     "AutoRoiResult",
     "FUSION_VERSION",
     "NORMALIZER_VERSION",
+    "OCRBackend",
+    "OcrResult",
     "OcrDetection",
     "OcrError",
-    "RapidOcrAdapter",
+    "RapidOcrBackend",
     "SampledFrame",
     "SourceTextEvent",
     "SubtitleOcrEvent",

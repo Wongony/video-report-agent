@@ -58,6 +58,7 @@ def create_server(root: Path, port: int = 8765) -> ThreadingHTTPServer:
                     root.glob("*/status.json"), key=lambda p: p.stat().st_mtime, reverse=True
                 )
             ]
+            statuses = [s for s in statuses if s.get("run_id")]
             if path == "/api/visual-report/current":
                 return self.send(200, {"run": statuses[0] if statuses else None})
             if path == "/api/visual-report/reports":
@@ -147,6 +148,8 @@ def create_server(root: Path, port: int = 8765) -> ThreadingHTTPServer:
     # Interrupted processes cannot resume an in-memory job after a restart.
     for path in root.glob("*/status.json"):
         data = json.loads(path.read_text())
+        if not data.get("run_id"):
+            continue
         if data["state"] not in {"RENDERED", "FAILED"}:
             data.update(
                 finished_at=time.time(),

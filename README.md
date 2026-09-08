@@ -30,7 +30,7 @@ Turn a public Bilibili video into a self-contained HTML reading report on Apple 
 ### Install and configure
 
 ```sh
-uv sync
+uv sync --extra mlx
 cp .env.example .env
 ```
 
@@ -113,7 +113,7 @@ OCR modes are:
 The web UI exposes the same transcript, OCR, and subtitle settings under **高级设置**. OCR is only used when `fused` is selected. The optional enhancement dependencies are installed with:
 
 ```sh
-uv sync --extra enhancement
+uv sync --extra mlx --extra enhancement
 ```
 
 ## How the pipeline works
@@ -181,7 +181,7 @@ Set either limit to `0` to disable that limit. When both limits are enabled, med
 ## Local-tool boundaries
 
 - Ingestion accepts public HTTPS Bilibili URLs only; it does not implement login or private-video access.
-- The default transcription path requires Apple Silicon macOS. A Linux deployment would need another transcription backend.
+- The default transcription path requires Apple Silicon macOS. The Paraformer path does not require MLX; Linux deployment itself has not been validated.
 - Downloading, audio extraction, and ASR happen locally. The selected model provider receives the data needed for report generation, so choose a provider appropriate for the source material.
 - Pi runs with standard `read`, `write`, `edit`, and `bash` tools inside the run directory. The system prompt narrows its intended scope, but these tools are not an operating-system sandbox and technically retain host access.
 - Restarting the web service marks unfinished runs as failed. Completed reports remain available under the run root.
@@ -196,3 +196,57 @@ uv lock --check
 ```
 
 The source skill that defines the report-writing behavior is [`src/video_report_agent/skills/video-report/SKILL.md`](src/video_report_agent/skills/video-report/SKILL.md).
+
+## ASR and OCR backends
+
+The default ASR is MLX Whisper. Its dependencies are optional (`uv sync --extra mlx`);
+`uv sync` installs the cloud path without MLX. FFmpeg/FFprobe remain required on both paths.
+OCR remains optional RapidOCR (`--extra enhancement`) and is off by default.
+
+For Beijing Paraformer, set `ASR_BACKEND=paraformer` and `DASHSCOPE_API_KEY` in `.env`.
+`DASHSCOPE_BASE_URL` defaults to `https://dashscope.aliyuncs.com/api/v1`.
+Do not set `ASR_MODEL` unless overriding: the backend supplies its default model
+(`mlx-community/whisper-large-v3-turbo` or `paraformer-v2`). An incompatible explicit
+model raises a configuration error. CLI values override environment values:
+
+```bash
+uv run video-report generate 'https://www.bilibili.com/video/BV1qC836BEsM/' --asr-backend paraformer
+uv run --extra mlx video-report generate 'https://www.bilibili.com/video/BV1qC836BEsM/' --asr-backend mlx
+```
+
+The Web app uses startup environment configuration. Non-secret effective settings are
+saved with each run and included in transcript reuse matching. Historical runs without
+backend identity can supply downloaded media but cannot supply reused transcripts.
+`--ocr-backend rapidocr` selects the existing OCR implementation; ROI and fusion behavior
+remain unchanged.
+
+Paraformer uploads the prepared mono 16 kHz WAV to Bailian temporary storage (1 GB upload
+limit, 48-hour validity), submits once, and polls for up to 30 minutes. This storage is
+for the current local tool, not production hosting. Request/upload timeouts are 60/300
+seconds. Submission timeout means **submission status unknown**: a billed task may exist;
+the client does not resubmit. Available task IDs are retained in `asr-error.json`.
+Diagnostics remove credentials and resource URLs; transcript text and provider identity
+remain available. All backend timestamps are relative to the supplied audio file.
+
+### Fixed-material comparison
+
+```bash
+uv run --extra mlx video-report compare-asr --manifest evals/asr/fixed-clips.json
+uv run --extra mlx video-report compare-asr --manifest evals/asr/full-video.json
+```
+
+The manifests reference existing local run media, with paths relative to the manifest.
+Each entry has `id`, `source_path`, `start_ms`, `duration_ms`, and optional `review_terms`.
+The first manifest contains nine 60-second clips; the second contains the full pelican
+video for Transcript Foundation integration. Both explicitly use ASR-only/OCR-off.
+No Pi report is generated. Both backends receive the same freshly prepared WAV, with
+no transcript cache reuse. Provider-required recognition parameters may differ.
+
+Results live under `runs/asr-compare-<id>/`: normalized/raw ASR, Canonical artifacts,
+`source-mapping.json`, `text.diff` when both succeed, and `comparison.json`/`.md`.
+Mappings add the source offset once; Canonical retains clip-relative timestamps.
+RTF is wall-clock ASR time divided by audio duration, including cloud upload/wait time.
+Usage is retained; missing verified price/billing data is reported as unavailable.
+Term occurrences and text differences are review aids, not accuracy scores. Without a
+human reference, CER is not calculated. Human listening remains pending. Missing cloud
+credentials produce NOT_RUN and an INCOMPLETE comparison (exit code 1), not a mock result.

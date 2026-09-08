@@ -6,6 +6,7 @@ from typing import Any
 
 from .transcript_foundation import (
     OcrError,
+    RapidOcrBackend,
     TranscriptFoundationError,
     asr_events_from_payload,
     build_canonical_transcript,
@@ -95,10 +96,13 @@ def build_transcript(
         else:
             requested_roi = None
         try:
+            if getattr(args, "ocr_backend", "rapidocr") != "rapidocr":
+                raise OcrError("Unsupported OCR backend")
+            backend = RapidOcrBackend()
             if ocr_mode == "roi":
                 roi = requested_roi
             else:
-                auto = detect_auto_roi(source_path, sample_fps=1.0)
+                auto = detect_auto_roi(source_path, sample_fps=1.0, adapter=backend)
                 warnings.extend(auto.warnings)
                 if auto.roi is None:
                     source_status["ocr"] = {"status": "UNSTABLE", "count": 0, "path": None}
@@ -110,6 +114,7 @@ def build_transcript(
                     source_path,
                     roi,
                     sample_fps=2.0,
+                    adapter=backend,
                     duration_ms=source_duration_ms,
                     roi_mode="explicit" if ocr_mode == "roi" else "auto",
                 )

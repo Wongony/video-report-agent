@@ -19,8 +19,10 @@
         radial-gradient(circle at 92% 18%, #ffedf7 0, transparent 30%), #f8fbff;
       overflow-x: hidden;
     }
-    body { padding: clamp(20px, 5vw, 72px) 16px; }
-    main { width: min(760px, 100%); margin: 0 auto; }
+    body { min-height: 100dvh; padding: clamp(20px, 5vw, 72px) 16px; display: flex; }
+    main { width: min(760px, 100%); margin: 0 auto; display: flex; flex-direction: column; }
+    main > .card { flex: 1; display: flex; flex-direction: column; }
+    main > .card > .history-button { margin-top: auto; }
     .eyebrow {
       color: var(--blue); font-size: 12px; font-weight: 750; letter-spacing: .14em;
       text-transform: uppercase;
@@ -609,7 +611,7 @@
           });
           if (!response.ok) return;
           const data = await response.json();
-          if (!data.run) return;
+          if (!data.run?.run_id) return;
           currentRunId = data.run.run_id;
           showStatus(data.run);
           if (!['RENDERED', 'FAILED', 'CANCELLED'].includes(data.run.state)) {

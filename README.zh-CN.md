@@ -30,7 +30,7 @@
 ### 安装与配置
 
 ```sh
-uv sync
+uv sync --extra mlx
 cp .env.example .env
 ```
 
@@ -113,7 +113,7 @@ OCR 模式包括：
 Web UI 的 **高级设置** 提供相同的文字稿、OCR 和字幕选项。只有选择 `fused` 时才会使用 OCR。可选增强依赖通过下面的命令安装：
 
 ```sh
-uv sync --extra enhancement
+uv sync --extra mlx --extra enhancement
 ```
 
 ## 流程如何工作
@@ -181,7 +181,7 @@ Web 服务启动时和每次生成结束后都会执行清理。清理只针对�
 ## 本地工具边界
 
 - 输入只接受公开的 HTTPS Bilibili 视频，不实现登录或私有视频访问。
-- 默认转写路径要求 Apple Silicon macOS。Linux 部署需要替换转写后端。
+- 默认转写路径要求 Apple Silicon macOS。Paraformer 路径不依赖 MLX；Linux 部署本身尚未验收。
 - 下载、音频提取和 ASR 在本机完成。报告生成需要把选定的数据交给模型 Provider，请根据来源内容选择合适的 Provider。
 - Pi 在 run 目录内使用标准的 `read`、`write`、`edit` 和 `bash` 工具。系统指令会限制预期工作范围，但这些工具不是操作系统级沙箱，技术上仍保留宿主机访问能力。
 - Web 服务重启时，未完成的 run 会标记为失败；已完成报告仍保留在 run 根目录中。
@@ -196,3 +196,49 @@ uv lock --check
 ```
 
 报告写作行为由 [`src/video_report_agent/skills/video-report/SKILL.md`](src/video_report_agent/skills/video-report/SKILL.md) 定义。
+
+## ASR 与 OCR backend
+
+默认使用 MLX Whisper，其相关依赖已移入可选组，安装命令为 `uv sync --extra mlx`。
+仅使用云端时运行 `uv sync`，不安装 MLX；两条路径均需要 FFmpeg/FFprobe。
+RapidOCR 仍在 `enhancement` 可选组，默认关闭。
+
+使用北京地域 Paraformer 时，在 `.env` 中设置 `ASR_BACKEND=paraformer` 和
+`DASHSCOPE_API_KEY`。`DASHSCOPE_BASE_URL` 默认是 `https://dashscope.aliyuncs.com/api/v1`。
+通常不设置 `ASR_MODEL`：先选择 backend，再使用其默认模型，分别为
+`mlx-community/whisper-large-v3-turbo` 和 `paraformer-v2`。显式模型与 backend
+不匹配会报配置错误。CLI 优先于环境配置：
+
+```bash
+uv run video-report generate 'https://www.bilibili.com/video/BV1qC836BEsM/' --asr-backend paraformer
+uv run --extra mlx video-report generate 'https://www.bilibili.com/video/BV1qC836BEsM/' --asr-backend mlx
+```
+
+Web 使用服务启动配置。每个任务保存非敏感配置快照，转写复用比较 backend、provider、
+model 和识别参数；历史任务缺少 backend 身份时仅可复用下载，不复用转写。
+`--ocr-backend rapidocr` 使用现有 OCR；ROI 与融合规则保持原样。
+
+Paraformer 将准备好的单声道 16 kHz WAV 上传至百炼临时空间（上传上限 1 GB，有效期
+48 小时），提交一次后轮询，最多等待 30 分钟。临时空间用于当前本地工具，不作为生产
+托管方案。普通请求和上传超时分别为 60、300 秒。提交超时会记录“提交状态未知”，
+此时可能已经存在收费任务，因此不自动重提。可获得的 task ID 保存在 `asr-error.json`。
+诊断数据落盘前移除凭证与资源 URL；保留识别文本和来源。backend 时间戳始终相对输入音频。
+
+### 固定材料对照
+
+```bash
+uv run --extra mlx video-report compare-asr --manifest evals/asr/fixed-clips.json
+uv run --extra mlx video-report compare-asr --manifest evals/asr/full-video.json
+```
+
+清单引用已有本地视频，路径相对清单文件；每项包含 `id`、`source_path`、`start_ms`、
+`duration_ms` 和可选的 `review_terms`。第一份包含 9 个 60 秒片段，第二份使用完整鹈鹕视频
+验收 Transcript Foundation 接入。两者明确使用 ASR-only/OCR-off，不调用 Pi 生成报告。
+两套 backend 识别同一份新准备的 WAV，不复用转写；供应商必需识别参数可以不同。
+
+产物位于 `runs/asr-compare-<id>/`，包括标准与原始 ASR、Canonical、`source-mapping.json`、
+双方成功时的 `text.diff`，以及 `comparison.json`/`.md`。映射只加一次原视频 offset，
+Canonical 保留片段内时间戳。RTF 为 ASR 墙钟耗时除以音频时长，包含云端上传和等待。
+服务计量会保留；没有核实单价或账单时费用标为不可获得，不编造估算。
+术语出现次数和文本差异只用于核听，不代表准确率；没有人工真值不计算 CER，人工核听状态
+保留为待完成。缺少云端凭证时记录 NOT_RUN，整体为 INCOMPLETE（退出码 1），不以 mock 代替。

@@ -9,7 +9,7 @@ description = "Bilibili to HTML reports with ASR and Pi RPC"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "mlx-whisper>=0.4.3",
+    "httpx>=0.28.1",
     "opencc-python-reimplemented>=0.1.7",
     "pydantic>=2.13.4",
     "python-dotenv>=1.2.3",
@@ -24,6 +24,9 @@ enhancement = [
     "onnxruntime>=1.29.0",
     "pysubs2>=1.9.0",
     "rapidocr>=3.9.0",
+]
+mlx = [
+    "mlx-whisper>=0.4.3",
 ]
 
 [tool.pytest.ini_options]

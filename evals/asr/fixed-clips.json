@@ -1,0 +1,94 @@
+{
+  "clips": [
+    {
+      "id": "agent-interview-start",
+      "source_path": "../../runs/06fa301c098140548fecff05ff2e55e0/download/source.mp4",
+      "start_ms": 0,
+      "duration_ms": 60000,
+      "review_terms": [
+        "Agent",
+        "RAG"
+      ]
+    },
+    {
+      "id": "agent-interview-middle",
+      "source_path": "../../runs/06fa301c098140548fecff05ff2e55e0/download/source.mp4",
+      "start_ms": 906066,
+      "duration_ms": 60000,
+      "review_terms": [
+        "Agent",
+        "RAG"
+      ]
+    },
+    {
+      "id": "agent-interview-end",
+      "source_path": "../../runs/06fa301c098140548fecff05ff2e55e0/download/source.mp4",
+      "start_ms": 1812133,
+      "duration_ms": 60000,
+      "review_terms": [
+        "Agent",
+        "RAG"
+      ]
+    },
+    {
+      "id": "pelican-start",
+      "source_path": "../../runs/08fee63d6eea49ceb147e2b3a5aab964/download/source.mp4",
+      "start_ms": 0,
+      "duration_ms": 60000,
+      "review_terms": [
+        "鹈鹕",
+        "SVG"
+      ]
+    },
+    {
+      "id": "pelican-middle",
+      "source_path": "../../runs/08fee63d6eea49ceb147e2b3a5aab964/download/source.mp4",
+      "start_ms": 215856,
+      "duration_ms": 60000,
+      "review_terms": [
+        "鹈鹕",
+        "SVG"
+      ]
+    },
+    {
+      "id": "pelican-end",
+      "source_path": "../../runs/08fee63d6eea49ceb147e2b3a5aab964/download/source.mp4",
+      "start_ms": 431712,
+      "duration_ms": 60000,
+      "review_terms": [
+        "鹈鹕",
+        "SVG"
+      ]
+    },
+    {
+      "id": "isaac-start",
+      "source_path": "../../runs/734ff575a9474475aadbcdbe47b60a38/download/source.mp4",
+      "start_ms": 0,
+      "duration_ms": 60000,
+      "review_terms": [
+        "里店",
+        "星象房"
+      ]
+    },
+    {
+      "id": "isaac-middle",
+      "source_path": "../../runs/734ff575a9474475aadbcdbe47b60a38/download/source.mp4",
+      "start_ms": 753338,
+      "duration_ms": 60000,
+      "review_terms": [
+        "里店",
+        "星象房"
+      ]
+    },
+    {
+      "id": "isaac-end",
+      "source_path": "../../runs/734ff575a9474475aadbcdbe47b60a38/download/source.mp4",
+      "start_ms": 1506677,
+      "duration_ms": 60000,
+      "review_terms": [
+        "里店",
+        "星象房"
+      ]
+    }
+  ]
+}

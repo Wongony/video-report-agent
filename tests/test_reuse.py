@@ -162,3 +162,26 @@ def test_download_only_hit_still_transcribes(completed, monkeypatch):
     assert status["download_reused_from"] == previous.name
     assert status["transcript_reused_from"] is None
     assert calls == ["audio", "asr", "canonical", "report"]
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("asr_backend", "paraformer"),
+        ("asr_provider", "dashscope"),
+        ("asr_parameters", {"changed": True}),
+    ],
+)
+def test_backend_identity_prevents_reuse(completed, field, value):
+    previous, metadata = completed
+    run = pipeline.create_run(previous.parent, URL)
+    assert reuse_transcript(run, {**metadata, field: value}) is None
+
+
+def test_legacy_without_backend_not_reused(completed):
+    previous, metadata = completed
+    old = dict(metadata)
+    del old["asr_backend"]
+    pipeline.write_json(previous / "input.json", old)
+    run = pipeline.create_run(previous.parent, URL)
+    assert reuse_transcript(run, metadata) is None

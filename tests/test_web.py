@@ -18,11 +18,20 @@ def test_local_ui_status_report_and_file_boundary(tmp_path):
         run / "status.json",
         {"run_id": run.name, "state": "RENDERED", "report_url": f"/reports/{run.name}/report.html"},
     )
+    comparison = tmp_path / "asr-compare-example"
+    comparison.mkdir()
+    comparison_status = {"state": "COMPLETE", "stage": "COMPARISON_READY"}
+    write_json(comparison / "status.json", comparison_status)
     server = create_server(tmp_path, 0)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     base = f"http://127.0.0.1:{server.server_port}"
     try:
+        assert json.loads((comparison / "status.json").read_text()) == comparison_status
+        with urlopen(base + "/api/visual-report/current") as response:
+            assert json.load(response)["run"]["run_id"] == run.name
+        with urlopen(base + f"/api/visual-report/runs/{run.name}") as response:
+            assert json.load(response)["state"] == "RENDERED"
         with urlopen(base) as response:
             page = response.read().decode()
             assert 'value="asr-only" selected' in page

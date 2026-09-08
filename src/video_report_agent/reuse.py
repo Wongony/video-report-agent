@@ -58,6 +58,21 @@ def reuse_download(source, run: Path, *, request_subtitles: bool):
 
 def reuse_transcript(run: Path, metadata: dict):
     for candidate, previous in previous_runs(run, metadata["video_id"]):
+        identity = (
+            "asr_backend",
+            "asr_provider",
+            "asr_model",
+            "asr_language",
+            "asr_parameters",
+            "asr_base_url",
+        )
+        if not previous.get("asr_backend") or any(
+            previous.get(key) != metadata.get(key) for key in identity
+        ):
+            continue
+        if metadata.get("transcript_mode") == "fused" and metadata.get("ocr_mode") != "off":
+            if any(previous.get(k) != metadata.get(k) for k in ("ocr_backend", "ocr_model")):
+                continue
         defaults = {"transcript_mode": "asr-only", "ocr_mode": "off", "ocr_roi": None}
         if previous.get("asr_model") != metadata["asr_model"] or any(
             previous.get(key, default) != metadata.get(key, default)

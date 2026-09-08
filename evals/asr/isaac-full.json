@@ -1,0 +1,22 @@
+{
+  "clips": [
+    {
+      "id": "isaac-full",
+      "source_path": "../../runs/734ff575a9474475aadbcdbe47b60a38/audio.wav",
+      "start_ms": 0,
+      "duration_ms": 1566677,
+      "review_terms": [
+        "以撒",
+        "店长",
+        "贪婪",
+        "恶魔房",
+        "天使房",
+        "献祭房",
+        "九命猫",
+        "混沌卡",
+        "PHD",
+        "MVP"
+      ]
+    }
+  ]
+}

@@ -12,6 +12,7 @@ class AsrSegment(BaseModel):
     start_ms: int = Field(ge=0)
     end_ms: int = Field(ge=1)
     text: str
+    words: list[dict] = Field(default_factory=list)
 
     @field_validator("text")
     @classmethod
