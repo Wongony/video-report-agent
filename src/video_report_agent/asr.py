@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import perf_counter
@@ -207,7 +209,14 @@ class MlxWhisperBackend:
         self.model = model
 
     def transcribe(self, audio_path: Path, language: str = "zh") -> AsrRun:
-        return _transcribe_mlx(audio_path, model=self.model, language=language)
+        # A fresh interpreter keeps MLX/Metal caches out of the long-lived web
+        # process. Exiting the executor waits for the worker to release them.
+        with ProcessPoolExecutor(
+            max_workers=1, mp_context=multiprocessing.get_context("spawn")
+        ) as executor:
+            return executor.submit(
+                _transcribe_mlx, audio_path, model=self.model, language=language
+            ).result()
 
 
 def transcribe_audio(
