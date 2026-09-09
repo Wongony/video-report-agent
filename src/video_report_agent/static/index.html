@@ -156,6 +156,7 @@
       display: inline-block; margin-top: 16px; padding: 10px 15px; border-radius: 10px;
       color: #315dcd; background: var(--blue-soft); font-weight: 700; text-decoration: none;
     }
+    .history-actions { display: flex; align-items: center; gap: 14px; }
     .history-button {
       color: #526079; background: #f8faff; border: 1px solid var(--line); box-shadow: none;
     }
@@ -255,6 +256,8 @@
         </div>
         <a id="report-link" class="report-link" href="#" target="_blank"
            rel="noreferrer" hidden>查看生成的报告</a>
+        <a id="image-link" class="report-link" href="#" target="_blank"
+           rel="noreferrer" hidden>查看图片</a>
       </div>
       <button id="history-open" class="history-button" type="button">历史报告</button>
     </section>
@@ -358,6 +361,7 @@
       const progress = document.querySelector('#progress');
       const progressFill = document.querySelector('#progress-fill');
       const progressSteps = [...document.querySelectorAll('.progress-step')];
+      const imageLink = document.querySelector('#image-link');
       const reportLink = document.querySelector('#report-link');
       const transcriptMode = document.querySelector('#transcript-mode');
       const ocrMode = document.querySelector('#ocr-mode');
@@ -517,7 +521,7 @@
         checkConnection();
       } else loadModels().catch(error => { loadError.textContent = error.message; });
       const labels = {
-        GENERATING: '正在生成报告', QUEUED: '等待处理', STARTING: '准备开始',
+        GENERATING_IMAGE: '正在生成报告长图', GENERATING: '正在生成报告', QUEUED: '等待处理', STARTING: '准备开始',
         DOWNLOADING: '正在下载视频', TRANSCRIBING: '正在生成文字稿', OCR: '正在识别字幕',
         FUSING: '正在融合文字稿', READY: '已完成', DEGRADED: '文字稿已降级但可继续',
         RENDERED: '报告已生成', FAILED: '运行失败', CANCELLED: '运行已取消'
@@ -539,7 +543,7 @@
 
       function updateProgress(displayStage, state) {
         const stepByStage = {
-          GENERATING: 2, QUEUED: 0, DOWNLOADING: 1, TRANSCRIBING: 1, OCR: 1, FUSING: 1,
+          GENERATING_IMAGE: 2, GENERATING: 2, QUEUED: 0, DOWNLOADING: 1, TRANSCRIBING: 1, OCR: 1, FUSING: 1,
           DEGRADED: 1, READY: 3, CREATED: 1,
           RENDERED: 3
         };
@@ -578,6 +582,8 @@
         statusDetail.hidden = !statusDetail.textContent;
         reportLink.hidden = !data.report_url;
         if (data.report_url) reportLink.href = data.report_url;
+        imageLink.hidden = !data.image_url;
+        if (data.image_url) imageLink.href = data.image_url;
         const terminal = ['RENDERED', 'FAILED', 'CANCELLED'].includes(data.state);
         statusBox.setAttribute('aria-busy', !terminal);
 
@@ -676,7 +682,19 @@
             link.target = '_blank';
             link.rel = 'noreferrer';
             link.textContent = report.report_url ? '打开报告' : '查看任务';
-            item.append(copy, link);
+            const actions = document.createElement('div');
+            actions.className = 'history-actions';
+            actions.append(link);
+            if (report.image_url) {
+              const image = document.createElement('a');
+              image.className = 'history-link';
+              image.href = report.image_url;
+              image.target = '_blank';
+              image.rel = 'noreferrer';
+              image.textContent = '查看图片';
+              actions.append(image);
+            }
+            item.append(copy, actions);
             return item;
           }));
         } catch (error) {
@@ -693,6 +711,7 @@
         const subtitleContent = selectedSubtitle ? await selectedSubtitle.text() : null;
         generate.disabled = true;
         reportLink.hidden = true;
+        imageLink.hidden = true;
         try {
           const response = await fetch('/api/visual-report/runs', {
             method: 'POST',

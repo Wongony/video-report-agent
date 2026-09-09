@@ -27,10 +27,14 @@
 - Pi 0.85.0 已加入 `PATH`。
 - 已配置模型 Provider 和凭证。示例环境默认使用 DeepSeek。
 
+
+报告同时输出 `report.png`：使用本地 Chromium 按 920 像素桌面宽度截取完整页面，保留 860 像素白色报告页面及两侧少量灰色背景，不增加模型调用。主页面和历史记录均提供“查看图片”；旧报告首次查看时补生成长图。
+
 ### 安装与配置
 
 ```sh
 uv sync --extra mlx
+uv run playwright install chromium
 cp .env.example .env
 ```
 

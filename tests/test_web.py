@@ -31,7 +31,9 @@ def test_local_ui_status_report_and_file_boundary(tmp_path):
         with urlopen(base + "/api/visual-report/current") as response:
             assert json.load(response) == {"run": None}
         with urlopen(base + f"/api/visual-report/runs/{run.name}") as response:
-            assert json.load(response)["state"] == "RENDERED"
+            status = json.load(response)
+            assert status["state"] == "RENDERED"
+            assert status["image_url"] == f"/reports/{run.name}/report.png"
         with urlopen(base) as response:
             page = response.read().decode()
             assert 'value="asr-only" selected' in page
@@ -41,6 +43,10 @@ def test_local_ui_status_report_and_file_boundary(tmp_path):
             assert len(json.load(response)["reports"]) == 1
         with urlopen(base + f"/reports/{run.name}/report.html") as response:
             assert "sandbox" in response.headers["Content-Security-Policy"]
+        with urlopen(base + f"/reports/{run.name}/report.png") as response:
+            assert response.headers["Content-Type"] == "image/png"
+            assert response.read().startswith(b"\x89PNG")
+        assert (run / "report.png").is_file()
         for path in [
             f"/reports/{run.name}/private.txt",
             f"/reports/{run.name}/assets/../private.txt",

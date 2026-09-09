@@ -16,6 +16,7 @@ from .ingest import UrlIngestError, download_bilibili_video, validate_bilibili_u
 from .media_config import resolve_media_config
 from .paraformer import CloudAsrError
 from .pi import PiError, PiRunner
+from .report_image import render_report_image
 from .retention import cleanup_media
 from .reuse import reuse_download, reuse_transcript
 from .transcript import build_transcript
@@ -159,7 +160,13 @@ def generate(run: Path) -> dict:
             (run / "transcript.md").write_text("\n".join(transcript))
         update("GENERATING")
         asyncio.run(PiRunner(**metadata.get("model_selection", {})).run(run))
-        update("RENDERED", report_url=f"/reports/{run.name}/report.html")
+        update("GENERATING_IMAGE")
+        try:
+            render_report_image(run)
+        except Exception as exc:
+            status["image_error"] = str(exc)
+        update("RENDERED", report_url=f"/reports/{run.name}/report.html",
+               image_url=f"/reports/{run.name}/report.png")
     except Exception as exc:
         if isinstance(exc, CloudAsrError):
             write_json(run / "asr-error.json", exc.to_dict())

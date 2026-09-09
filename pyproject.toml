@@ -11,6 +11,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "httpx>=0.28.1",
     "opencc-python-reimplemented>=0.1.7",
+    "playwright>=1.62.0",
     "pydantic>=2.13.4",
     "python-dotenv>=1.2.3",
     "yt-dlp>=2026.8.19",

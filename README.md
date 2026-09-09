@@ -27,10 +27,14 @@ Turn a public Bilibili video into a self-contained HTML reading report on Apple 
 - Pi 0.85.0 available on `PATH`.
 - A configured model provider and credential. The example environment uses DeepSeek.
 
+
+Reports also produce `report.png`: a full-page desktop screenshot at 920 px wide, keeping the 860 px report paper and a small amount of canvas around it. This uses local Chromium, with no extra model calls. The main page and history offer an image link; older reports generate the image on first access.
+
 ### Install and configure
 
 ```sh
 uv sync --extra mlx
+uv run playwright install chromium
 cp .env.example .env
 ```
 

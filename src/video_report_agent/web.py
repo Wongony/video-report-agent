@@ -16,6 +16,7 @@ from .model_config import catalog, check_connection, save_model, validate_select
 from .pi import DEFAULT_MODEL, DEFAULT_PROVIDER, DEFAULT_THINKING
 from .pipeline import create_run, generate, write_json
 from .queue import AdmissionError, RunQueue
+from .report_image import REPORT_CSP, render_report_image
 from .retention import cleanup_media
 from .session import OwnerSessions
 from .transcript_foundation import TranscriptFoundationError
@@ -81,6 +82,8 @@ def create_server(
                     except (OSError, ValueError):
                         continue
             for item in statuses:
+                if item.get("state") == "RENDERED" and item.get("report_url"):
+                    item["image_url"] = f"/reports/{item['run_id']}/report.png"
                 item.pop("download_reused_from", None)
                 item.pop("transcript_reused_from", None)
             return statuses
@@ -100,9 +103,7 @@ def create_server(
             if content_type.startswith("text/html") and self.path.startswith("/reports/"):
                 self.send_header(
                     "Content-Security-Policy",
-                    "sandbox allow-scripts; default-src 'none'; "
-                    "style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
-                    "img-src 'self' data:; font-src data:",
+                    REPORT_CSP,
                 )
             self.end_headers()
             self.wfile.write(body)
@@ -167,13 +168,22 @@ def create_server(
                 allowed = (
                     len(parts) >= 2
                     and parts[0] in {s["run_id"] for s in statuses if s["state"] == "RENDERED"}
-                    and (parts[1] == "report.html" or parts[1] == "assets")
+                    and (parts[1] in {"report.html", "report.png", "assets"})
                 )
                 if allowed:
                     run_root = root / parts[0]
-                    allowed = target == run_root / "report.html" or target.is_relative_to(
-                        run_root / "assets"
+                    allowed = (
+                        target in {run_root / "report.html", run_root / "report.png"}
+                        or target.is_relative_to(run_root / "assets")
                     )
+                if allowed and target == root / parts[0] / "report.png" and not target.exists():
+                    try:
+                        render_report_image(root / parts[0])
+                    except Exception:
+                        return self.send(
+                            503, "长图生成失败，请刷新重试。HTML 报告仍可打开。".encode(),
+                            "text/plain; charset=utf-8",
+                        )
                 if allowed and target.is_relative_to(root) and target.is_file():
                     run_status = root / parts[0] / "status.json"
                     if (
