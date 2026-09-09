@@ -97,19 +97,23 @@ def generate(run: Path) -> dict:
         update("DOWNLOADING")
         source = validate_bilibili_url(metadata["url"])
         request_subtitles = metadata.get("transcript_mode") == "fused"
+        audio_only = metadata.get("transcript_mode", "asr-only") == "asr-only"
         downloaded, download_source = reuse_download(
             source,
             run,
             request_subtitles=request_subtitles,
+            audio_only=audio_only,
         )
         if downloaded is None:
             downloaded = download_bilibili_video(
                 source,
                 run,
                 request_subtitles=request_subtitles,
+                audio_only=audio_only,
             )
         status["download_reused_from"] = download_source
         metadata.update(
+            download_audio_only=audio_only,
             title=downloaded.title,
             uploader=downloaded.uploader,
             attribution=downloaded.attribution,

@@ -90,6 +90,35 @@ def test_atomic_admission(tmp_path):
         queue.close()
 
 
+def test_duplicate_admission_is_atomic_and_owner_scoped(tmp_path):
+    release = threading.Event()
+
+    def generate(run):
+        release.wait(3)
+        write_json(run / "status.json", {"state": "RENDERED"})
+
+    queue = RunQueue(tmp_path, generate)
+
+    def submit(owner):
+        try:
+            return queue.submit(
+                owner, lambda: create_run(tmp_path, "BV1aTtb6uE7d"),
+                video_id="bilibili-BV1aTtb6uE7d-p1",
+            )
+        except AdmissionError as exc:
+            return str(exc)
+
+    try:
+        with ThreadPoolExecutor(max_workers=10) as callers:
+            outcomes = list(callers.map(submit, ["a"] * 10))
+        assert outcomes.count("VIDEO_ALREADY_ACTIVE") == 9
+        assert len(list(tmp_path.glob("*/input.json"))) == 1
+        assert not isinstance(submit("b"), str)
+    finally:
+        release.set()
+        queue.close()
+
+
 def seed(root, owner, sequence, state, pipeline_state=None):
     run = create_run(root, "BV1aTtb6uE7d")
     write_json(

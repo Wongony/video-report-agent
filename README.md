@@ -288,3 +288,29 @@ Usage is retained; missing verified price/billing data is reported as unavailabl
 Term occurrences and text differences are review aids, not accuracy scores. Without a
 human reference, CER is not calculated. Human listening remains pending. Missing cloud
 credentials produce NOT_RUN and an INCOMPLETE comparison (exit code 1), not a mock result.
+
+### Administrator usage statistics
+
+Set a private `ADMIN_TOKEN` in `.env`, restart the web server, then open `/admin` and
+enter the token. Without it, both admin routes are disabled. Use HTTPS for public
+deployments. The page keeps the token only in memory, never in URLs or browser storage.
+Generate a token with `uv run python -c "import secrets; print(secrets.token_urlsafe(32))"`
+and save it in `.env` yourself.
+
+The dashboard shows anonymous visitors, submitting visitors, homepage views, submission
+attempts and rejections, tasks, successful reports, failures, success rate, and per-task
+duration and costs. Dates use Asia/Shanghai; tasks are filtered by submission date and
+success rate covers finished tasks only. Signed cookies identify browsers, not people;
+changing browsers or clearing cookies counts again, and bots are not excluded.
+`runs/.usage.jsonl` records homepage visits and submission outcomes from this version
+onward. Retained task files supply historical tasks; ownerless tasks do not add visitors.
+
+Model costs sum completed assistant-message `usage.cost.total` values from
+`pi.events.jsonl` (USD), using Pi's configured pricing estimates, including calls from
+failed tasks. Unpriced or zero-filled call costs are unknown. Optionally set
+`ASR_CNY_PER_SECOND` to your plan's CNY rate to estimate Paraformer cost from recognition
+duration. Missing rates or durations remain unknown. Local ASR and reused transcripts
+have zero incremental API cost. Currencies are separate and totals cover known amounts
+only. These are not provider bills and exclude hardware, electricity, OCR, connectivity
+checks and other unrecorded calls. Deleting run directories removes their task and cost
+history from these statistics; retain the logs.

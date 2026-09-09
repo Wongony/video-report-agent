@@ -31,7 +31,6 @@
       margin: 10px 0 12px; font-size: clamp(30px, 7vw, 56px);
       line-height: 1.05; letter-spacing: -.04em;
     }
-    .intro { color: var(--muted); max-width: 650px; line-height: 1.7; }
     .card {
       position: relative;
       margin-top: 28px; padding: clamp(20px, 4vw, 34px); border: 1px solid #e3eaf5;
@@ -114,6 +113,7 @@
       display: flex; align-items: baseline; justify-content: space-between;
       gap: 12px; flex-wrap: wrap;
     }
+    .video-title { margin: 0 0 16px; color: var(--ink); font-size: 17px; font-weight: 650; line-height: 1.5; overflow-wrap: anywhere; }
     .status-label { color: var(--ink); font-size: 18px; font-weight: 750; }
     .status-code {
       color: var(--blue); font-size: 13px; font-weight: 700;
@@ -122,7 +122,7 @@
       margin: 10px 0 0; color: var(--muted); line-height: 1.55; overflow-wrap: anywhere;
     }
     .progress-track {
-      height: 6px; margin: 22px 9px 0; border-radius: 99px; background: #e9eef7;
+      height: 6px; margin: 22px calc(100% / 6) 0; border-radius: 99px; background: #e9eef7;
       overflow: hidden;
     }
     .progress-fill {
@@ -131,7 +131,7 @@
       transition: width .45s ease;
     }
     .progress-steps {
-      display: grid; grid-template-columns: repeat(4, 1fr); margin-top: -12px;
+      display: grid; grid-template-columns: repeat(3, 1fr); margin-top: -12px;
       list-style: none; padding: 0;
     }
     .progress-step { position: relative; text-align: center; color: #98a2b3; font-size: 12px; }
@@ -171,6 +171,9 @@
       color: #315dcd; font-size: 13px; font-weight: 750; text-decoration: none;
       white-space: nowrap;
     }
+    .history-error { margin: 0; color: #a62c3c; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+    .history-item:has(.history-error) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    @media (max-width: 520px) { .history-item:has(.history-error) { grid-template-columns: minmax(0, 1fr); gap: 8px; } }
     .history-empty { margin: 10px 0; color: var(--muted); text-align: center; }
     [hidden] { display: none !important; }
     @media (max-width: 520px) {
@@ -183,7 +186,6 @@
     @media (min-width: 521px) and (max-height: 820px) {
       body { padding-top: 8px; padding-bottom: 8px; }
       h1 { font-size: 40px; }
-      .intro { margin-bottom: 0; font-size: 14px; line-height: 1.5; }
       .card { margin-top: 16px; padding: 20px; }
       .settings-toolbar { margin-bottom: 12px; }
       .status { margin-top: 16px; padding-top: 16px; }
@@ -196,7 +198,8 @@
       .progress-fill, .step-dot { transition: none; }
       .progress-step.is-current .step-dot { animation: none; }
     }
-    html[data-mode="public"] .model-summary,
+    html[data-mode="public"] #settings-open,
+    html[data-mode="public"] #advanced-settings,
     html[data-mode="public"] section[aria-label="模型设置"],
     html[data-mode="public"] #model-dialog { display: none; }
   </style>
@@ -205,10 +208,6 @@
   <main>
     <div class="eyebrow">Video Visual Report · Local MVP</div>
     <h1>把一个公开 BV 视频变成报告</h1>
-    <p class="intro">
-      输入一个公开的 Bilibili 视频地址或 BV 号。本地会依次下载视频、生成文字稿、理解内容，
-      最后生成一份带来源引用的视频报告。
-    </p>
     <section class="card" aria-labelledby="url-label">
       <div class="settings-toolbar">
         <div class="model-summary" role="status"><span class="connection-dot" data-state="pending" aria-hidden="true"></span><span id="model-summary" class="model-summary-text">正在读取模型…</span></div>
@@ -232,12 +231,13 @@
       </div>
       <label id="url-label" for="url">Bilibili 视频链接或 BV 号</label>
       <input id="url" name="url" type="text"
-             placeholder="粘贴视频链接或 BV 号" autocomplete="off">
+             placeholder="粘贴视频链接、分享文案或 BV 号" autocomplete="off">
       <div id="source-info" class="source-info" aria-live="polite">
-        支持公开视频链接或完整 BV 号；BV 号默认使用 P1。
+        支持公开视频链接、带【标题】的分享文案或完整 BV 号；BV 号默认使用 P1。
       </div>
       <button id="generate" type="button">生成 Visual Report</button>
       <div class="status" aria-live="polite" aria-atomic="true" aria-busy="false">
+        <p id="video-title" class="video-title" hidden></p>
         <div class="status-title">
           <span id="status-label" class="status-label">尚未开始</span>
           <span id="status-code" class="status-code">准备就绪</span>
@@ -245,19 +245,18 @@
         <p id="status-detail" class="status-detail">粘贴视频链接后，点击上方按钮开始生成。</p>
         <p id="elapsed" class="status-detail elapsed" hidden>用时：0 分 0 秒</p>
         <div id="progress" role="progressbar" aria-label="报告生成进度"
-             aria-valuemin="0" aria-valuemax="4" aria-valuenow="0">
+             aria-valuemin="0" aria-valuemax="3" aria-valuenow="0">
           <div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div>
           <ol class="progress-steps">
-            <li class="progress-step" data-step="1"><span class="step-dot"></span>下载视频</li>
-            <li class="progress-step" data-step="2"><span class="step-dot"></span>生成文字稿</li>
-            <li class="progress-step" data-step="3"><span class="step-dot"></span>理解内容</li>
-            <li class="progress-step" data-step="4"><span class="step-dot"></span>生成报告</li>
+            <li class="progress-step" data-step="1"><span class="step-dot"></span>解析视频</li>
+            <li class="progress-step" data-step="2"><span class="step-dot"></span>理解内容</li>
+            <li class="progress-step" data-step="3"><span class="step-dot"></span>生成报告</li>
           </ol>
         </div>
         <a id="report-link" class="report-link" href="#" target="_blank"
            rel="noreferrer" hidden>查看生成的报告</a>
       </div>
-      <button id="history-open" class="history-button" type="button">我的任务</button>
+      <button id="history-open" class="history-button" type="button">历史报告</button>
     </section>
     <dialog id="model-dialog" class="settings-dialog" aria-labelledby="model-title">
       <form id="model-form" class="settings-panel">
@@ -334,14 +333,14 @@
       <div class="settings-panel">
         <div class="settings-header">
           <div>
-            <h2 id="history-title">我的任务</h2>
+            <h2 id="history-title">历史报告</h2>
             <p class="settings-copy">这里汇总你的等待、运行和已结束任务。</p>
           </div>
           <button id="history-close" class="dialog-close" type="button"
-                  aria-label="关闭我的任务">×</button>
+                  aria-label="关闭历史报告">×</button>
         </div>
         <div id="history-list" class="history-list" aria-live="polite">
-          <p class="history-empty">正在读取我的任务…</p>
+          <p class="history-empty">正在读取历史报告…</p>
         </div>
       </div>
     </dialog>
@@ -352,6 +351,7 @@
       const url = document.querySelector('#url');
       const generate = document.querySelector('#generate');
       const statusBox = document.querySelector('.status');
+      const videoTitle = document.querySelector('#video-title');
       const statusLabel = document.querySelector('#status-label');
       const statusCode = document.querySelector('#status-code');
       const statusDetail = document.querySelector('#status-detail');
@@ -393,7 +393,7 @@
       function updateSummary(state = 'pending') {
         const model = modelCatalog.find(m => modelId(m) === modelSelect.value);
         const effort = thinkingSelect.value;
-        summary.textContent = model ? `${model.name} ${effort.charAt(0).toUpperCase() + effort.slice(1)}` : '未选择模型';
+        summary.textContent = publicMode ? 'DeepSeek V4 Flash Vision Low' : model ? `${model.name} ${effort.charAt(0).toUpperCase() + effort.slice(1)}` : '未选择模型';
         const message = { pending: '正在检测连接…', connected: '已连接', failed: '未能连接模型服务' }[state];
         summary.parentElement.title = message;
         summary.parentElement.setAttribute('aria-label', `${summary.textContent}，${message}`);
@@ -406,17 +406,17 @@
         clearTimeout(toastTimeout);
         toast.hidden = true;
         updateSummary();
-        if (!model) return;
+        if (!publicMode && !model) return;
         try {
           const response = await fetch('/api/models/check', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ provider: model.provider, model: model.model, thinking: thinkingSelect.value }) });
+            body: JSON.stringify(publicMode ? {} : { provider: model.provider, model: model.model, thinking: thinkingSelect.value }) });
           const data = await response.json();
           if (!response.ok || !data.connected) throw new Error(data.error || '未能连接模型服务');
           if (version === checkVersion) updateSummary('connected');
         } catch {
           if (version !== checkVersion) return;
           updateSummary('failed');
-          toast.textContent = '未能连接模型服务，请检查 API Key、服务地址及模型权限后重试。';
+          toast.textContent = publicMode ? '未能连接模型服务，请稍后刷新重试。' : '未能连接模型服务，请检查 API Key、服务地址及模型权限后重试。';
           // Put the notification in the active dialog so it remains above the modal backdrop.
           (modelDialog.open ? modelDialog : settingsDialog.open ? settingsDialog : document.body).append(toast);
           toast.hidden = false;
@@ -445,7 +445,7 @@
         const previous = thinkingSelect.value;
         thinkingSelect.replaceChildren(...(model?.thinking_levels || []).map(level => new Option(thinkingLabels[level] || level, level)));
         if (model?.thinking_levels.includes(previous)) thinkingSelect.value = previous;
-        else if (model?.thinking_levels.includes('medium')) thinkingSelect.value = 'medium';
+        else if (model?.thinking_levels.includes('low')) thinkingSelect.value = 'low';
         thinkingSelect.disabled = !model || model.thinking_levels.length < 2;
       }
       async function loadModels(preferred) {
@@ -513,7 +513,9 @@
         finally { saveButton.disabled = false; saveButton.textContent = '保存并选择'; }
       });
       const publicMode = document.documentElement.dataset.mode === 'public';
-      if (!publicMode) loadModels().catch(error => { loadError.textContent = error.message; });
+      if (publicMode) {
+        checkConnection();
+      } else loadModels().catch(error => { loadError.textContent = error.message; });
       const labels = {
         GENERATING: '正在生成报告', QUEUED: '等待处理', STARTING: '准备开始',
         DOWNLOADING: '正在下载视频', TRANSCRIBING: '正在生成文字稿', OCR: '正在识别字幕',
@@ -537,15 +539,14 @@
 
       function updateProgress(displayStage, state) {
         const stepByStage = {
-          GENERATING: 3, QUEUED: 0, DOWNLOADING: 1, TRANSCRIBING: 2, OCR: 2, FUSING: 2,
-          DEGRADED: 2, READY: 4, CREATED: 1,
-          RENDERED: 4
+          GENERATING: 2, QUEUED: 0, DOWNLOADING: 1, TRANSCRIBING: 1, OCR: 1, FUSING: 1,
+          DEGRADED: 1, READY: 3, CREATED: 1,
+          RENDERED: 3
         };
         const step = stepByStage[displayStage] || 0;
-        const completed = state === 'RENDERED' ? 4 : Math.max(0, step - 1);
-        progress.setAttribute('aria-valuenow', String(state === 'RENDERED' ? 4 : step));
-        const progressPercent = state === 'RENDERED' ? 100 :
-          completed * 25 + (step ? 12.5 : 0);
+        const completed = state === 'RENDERED' ? 3 : Math.max(0, step - 1);
+        progress.setAttribute('aria-valuenow', String(state === 'RENDERED' ? 3 : step));
+        const progressPercent = state === 'RENDERED' ? 100 : completed * 50;
         progressFill.style.width = `${progressPercent}%`;
         for (const item of progressSteps) {
           const itemStep = Number(item.dataset.step);
@@ -557,6 +558,8 @@
       function showStatus(data) {
         updateTimer({ ...data, started_at: 'execution_started_at' in data
           ? data.execution_started_at : data.started_at });
+        videoTitle.textContent = data.title || (['QUEUED', 'RUNNING'].includes(data.state) ? '正在获取视频标题…' : '');
+        videoTitle.hidden = !videoTitle.textContent;
         const displayStage = data.stage || data.state || 'UNKNOWN';
         statusLabel.textContent = labels[displayStage] || '状态更新';
         statusCode.textContent = displayStage;
@@ -565,7 +568,7 @@
         const step = Number(progress.getAttribute('aria-valuenow'));
         const queued = displayStage === 'QUEUED';
         statusCode.textContent = data.state === 'RENDERED' ? '已完成' :
-          (queued ? `排队第 ${data.queue_position ?? 1} 位` : `第 ${step || 1}/4 步`);
+          (queued ? `排队第 ${data.queue_position ?? 1} 位` : `第 ${step || 1}/3 步`);
         statusDetail.textContent = queued ?
           `前面有 ${data.queued_ahead ?? 0} 个等待任务；当前执行 ${data.running_count ?? 0} 个任务。` +
           '按队列顺序和每人一个执行名额调度，轮到后自动开始。' :
@@ -581,7 +584,7 @@
         if (terminal) polling = false;
       }
 
-      async function pollRun() {
+      async function pollRun(restoring = false) {
         if (!currentRunId || polling) return;
         polling = true;
         const requestedRunId = currentRunId;
@@ -593,6 +596,15 @@
           if (!response.ok) throw new Error('run_unavailable');
           const data = await response.json();
           if (requestedRunId !== currentRunId) return;
+          if (restoring && data.state === 'RENDERED') {
+            currentRunId = null;
+            polling = false;
+            const pageUrl = new URL(window.location.href);
+            pageUrl.searchParams.delete('run_id');
+            window.history.replaceState(null, '', pageUrl);
+            await restoreOwnRun();
+            return;
+          }
           showStatus(data);
           if (!['RENDERED', 'FAILED', 'CANCELLED'].includes(data.state)) {
             polling = false;
@@ -629,7 +641,7 @@
 
       async function showHistory() {
         historyDialog.showModal();
-        historyList.innerHTML = '<p class="history-empty">正在读取我的任务…</p>';
+        historyList.innerHTML = '<p class="history-empty">正在读取历史报告…</p>';
         try {
           const response = await fetch('/api/visual-report/runs', {
             headers: { 'Accept': 'application/json' }
@@ -651,6 +663,13 @@
             meta.className = 'history-meta';
             meta.textContent = `${report.video_id || ''} · ${labels[report.stage] || report.state}`;
             copy.append(title, meta);
+            if (report.state === 'FAILED') {
+              const error = document.createElement('p');
+              error.className = 'history-error';
+              error.textContent = report.error || report.error_category || '运行失败，未记录具体错误。';
+              item.append(copy, error);
+              return item;
+            }
             const link = document.createElement('a');
             link.className = 'history-link';
             link.href = report.report_url || `/?run_id=${encodeURIComponent(report.run_id)}`;
@@ -661,7 +680,7 @@
             return item;
           }));
         } catch (error) {
-          historyList.innerHTML = '<p class="history-empty">我的任务暂时无法读取。</p>';
+          historyList.innerHTML = '<p class="history-empty">历史报告暂时无法读取。</p>';
         }
       }
 
@@ -729,7 +748,7 @@
         if (event.key === 'Enter') generateReport();
       });
       const initialRunId = new URLSearchParams(window.location.search).get('run_id');
-      if (initialRunId) { currentRunId = initialRunId; pollRun(); }
+      if (initialRunId) { currentRunId = initialRunId; pollRun(true); }
       else { restoreOwnRun(); }
     })();
   </script>

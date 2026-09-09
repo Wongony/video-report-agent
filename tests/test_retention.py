@@ -10,7 +10,7 @@ def make_run(root, name, state="RENDERED", age=0):
     (run / "download").mkdir(parents=True)
     (run / "assets").mkdir()
     for name in (
-        "download/source.mp4", "audio.wav", "report.html", "transcript.md",
+        "download/source.mp4", "download/source.m4a", "audio.wav", "report.html", "transcript.md",
         "download/source.info.json", "download/source.zh.srt", "assets/image.png", "failure.log",
     ):
         (run / name).write_text("keep or remove")
@@ -31,6 +31,7 @@ def test_default_keeps_twenty_and_preserves_report_and_evidence(tmp_path, monkey
     assert all((run / "download/source.mp4").exists() for run in runs[:20])
     old = runs[-1]
     assert not (old / "download/source.mp4").exists()
+    assert not (old / "download/source.m4a").exists()
     assert not (old / "audio.wav").exists()
     for name in (
         "report.html", "transcript.md", "download/source.info.json",
@@ -51,5 +52,6 @@ def test_age_and_disabled_limits(tmp_path, monkeypatch):
     assert (old / "audio.wav").exists()
     monkeypatch.setenv("MEDIA_MAX_AGE_DAYS", "7")
     cleanup_media(tmp_path)
+    assert not (old / "download/source.m4a").exists()
     assert not (old / "audio.wav").exists()
     assert (recent / "audio.wav").exists()

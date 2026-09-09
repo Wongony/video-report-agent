@@ -106,10 +106,16 @@ class RunQueue:
         with self.lock:
             self._dispatch()
 
-    def submit(self, owner_id, create):
+    def submit(self, owner_id, create, *, video_id=None):
         with self.lock:
             if self.stopped:
                 raise AdmissionError("SERVER_STOPPING")
+            if video_id is not None:
+                for run_id, record in self.records.items():
+                    if record["owner_id"] == owner_id and record["state"] in {"QUEUED", "RUNNING"}:
+                        metadata = json.loads((self.root / run_id / "input.json").read_text())
+                        if metadata["video_id"] == video_id:
+                            raise AdmissionError("VIDEO_ALREADY_ACTIVE")
             active = sum(
                 r["owner_id"] == owner_id and r["state"] in {"QUEUED", "RUNNING"}
                 for r in self.records.values()

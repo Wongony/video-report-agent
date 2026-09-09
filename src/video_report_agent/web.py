@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 import mimetypes
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
-from .ingest import UrlIngestError
+from .analytics import Analytics, number
+from .ingest import UrlIngestError, validate_bilibili_url
 from .model_config import catalog, check_connection, save_model, validate_selection
+from .pi import DEFAULT_MODEL, DEFAULT_PROVIDER, DEFAULT_THINKING
 from .pipeline import create_run, generate, write_json
 from .queue import AdmissionError, RunQueue
 from .retention import cleanup_media
@@ -32,6 +36,11 @@ def create_server(
 ) -> ThreadingHTTPServer:
     if mode not in {"local", "public"}:
         raise ValueError("mode must be local or public")
+    admin_token = os.getenv("ADMIN_TOKEN", "").strip()
+    rate = os.getenv("ASR_CNY_PER_SECOND", "").strip()
+    asr_rate = float(rate) if rate else None
+    if asr_rate is not None and not number(asr_rate):
+        raise ValueError("ASR_CNY_PER_SECOND must be a non-negative finite number")
     if public_origin is not None:
         origin = urlsplit(public_origin)
         if origin.scheme not in {"http", "https"} or not origin.netloc or origin.path:
@@ -49,6 +58,7 @@ def create_server(
         sessions = OwnerSessions(
             root, secure=bool(public_origin and public_origin.startswith("https://"))
         )
+        analytics = Analytics(root, asr_rate=asr_rate)
     except Exception:
         queue.close()
         raise
@@ -76,6 +86,8 @@ def create_server(
             return statuses
 
         def send(self, status, body, content_type="application/json; charset=utf-8"):
+            if self.command == "POST" and self.path == "/api/visual-report/runs":
+                analytics.record("submit", self.owner, http_status=status)
             if not isinstance(body, bytes):
                 body = json.dumps(body, ensure_ascii=False).encode()
             self.send_response(status)
@@ -99,12 +111,34 @@ def create_server(
             self.identify()
             path = unquote(urlsplit(self.path).path)
             if path == "/":
+                analytics.record("visit", self.owner)
                 page = PAGE.read_text().replace('data-mode="local"', f'data-mode="{mode}"')
                 if mode == "public":
                     page = page.replace("LOCAL MVP", "PUBLIC QUEUE").replace(
                         "本地会依次", "服务端会依次"
                     )
                 return self.send(200, page.encode(), "text/html; charset=utf-8")
+            if path in {"/admin", "/api/admin/stats"}:
+                if not admin_token:
+                    return self.send(404, {"error": "Admin statistics are disabled"})
+                if path == "/admin":
+                    return self.send(
+                        200, PAGE.with_name("admin.html").read_bytes(),
+                        "text/html; charset=utf-8",
+                    )
+                supplied = self.headers.get("Authorization", "")
+                if not hmac.compare_digest(
+                    supplied.encode(), f"Bearer {admin_token}".encode()
+                ):
+                    return self.send(401, {"error": "管理员密钥不正确"})
+                query = parse_qs(urlsplit(self.path).query)
+                try:
+                    result = analytics.snapshot(
+                        query.get("start", [None])[0], query.get("end", [None])[0]
+                    )
+                except ValueError:
+                    return self.send(400, {"error": "请使用有效日期，开始日期不能晚于结束日期"})
+                return self.send(200, result)
             if path == "/api/models":
                 if mode == "public":
                     return self.send(403, {"error": "Model configuration is disabled"})
@@ -115,7 +149,7 @@ def create_server(
             statuses = self.statuses()
             if path == "/api/visual-report/current":
                 active = [s for s in statuses if s["state"] in {"QUEUED", "RUNNING"}]
-                return self.send(200, {"run": (active or statuses or [None])[0]})
+                return self.send(200, {"run": (active or [None])[0]})
             if path == "/api/visual-report/runs":
                 return self.send(200, {"runs": statuses})
             if path == "/api/visual-report/reports":
@@ -154,7 +188,7 @@ def create_server(
             self.identify()
             if self.path not in {"/api/visual-report/runs", "/api/models", "/api/models/check"}:
                 return self.send(404, {"error": "Not found"})
-            if mode == "public" and self.path.startswith("/api/models"):
+            if mode == "public" and self.path == "/api/models":
                 return self.send(403, {"error": "Model configuration is disabled"})
             expected_origin = public_origin or f"http://{self.headers.get('Host')}"
             if self.headers.get("Origin") not in (None, expected_origin):
@@ -167,6 +201,15 @@ def create_server(
                 if not isinstance(data, dict):
                     raise ValueError("Request must be a JSON object")
                 if self.path == "/api/models/check":
+                    if mode == "public":
+                        if data:
+                            return self.send(403, {"error": "Public model configuration is fixed"})
+                        result = check_connection({
+                            "provider": DEFAULT_PROVIDER,
+                            "model": DEFAULT_MODEL,
+                            "thinking": DEFAULT_THINKING,
+                        })
+                        return self.send(200, {"connected": result["connected"]})
                     return self.send(200, check_connection(data))
                 if self.path == "/api/models":
                     return self.send(201, save_model(data))
@@ -177,7 +220,11 @@ def create_server(
                     return self.send(
                         403, {"error": "Public tasks use the server model configuration"}
                     )
-                selection = validate_selection(data) if mode == "local" else None
+                selection = validate_selection(data) if mode == "local" else {
+                    "provider": DEFAULT_PROVIDER,
+                    "model": DEFAULT_MODEL,
+                    "thinking": DEFAULT_THINKING,
+                }
                 if data.get("subtitle_content") is not None:
                     suffix = Path(data.get("subtitle_name") or "").suffix.lower()
                     if suffix not in {".srt", ".vtt", ".ass"} or not isinstance(
@@ -202,9 +249,12 @@ def create_server(
                         write_json(run / "input.json", metadata)
                     return run
 
-                run = queue.submit(self.owner, create)
+                run = queue.submit(
+                    self.owner, create, video_id=validate_bilibili_url(data["url"]).video_id
+                )
             except AdmissionError as exc:
                 messages = {
+                    "VIDEO_ALREADY_ACTIVE": "这个视频正在生成或排队中，请等待任务结束后再重新生成。",
                     "USER_ACTIVE_LIMIT": "你的待处理任务已达上限，请等待任务完成。",
                     "QUEUE_FULL": "等待队列已满，请稍后再提交。",
                     "SERVER_STOPPING": "服务正在关闭，请稍后重试。",

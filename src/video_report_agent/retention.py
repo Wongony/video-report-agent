@@ -32,7 +32,13 @@ def cleanup_media(root: Path) -> None:
             paths = [run / "audio.wav"]
             download = run / "download"
             if not download.is_symlink():
-                paths.extend(download.glob("source*.mp4"))
+                paths.extend(
+                    path for path in download.glob("source*")
+                    if path.suffix in {
+                        ".mp4", ".m4a", ".webm", ".opus", ".mp3",
+                        ".ogg", ".aac", ".flac", ".wav", ".mkv",
+                    }
+                )
             for path in paths:
                 try:
                     path.unlink(missing_ok=True)

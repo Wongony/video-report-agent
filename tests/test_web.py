@@ -29,7 +29,7 @@ def test_local_ui_status_report_and_file_boundary(tmp_path):
     try:
         assert json.loads((comparison / "status.json").read_text()) == comparison_status
         with urlopen(base + "/api/visual-report/current") as response:
-            assert json.load(response)["run"]["run_id"] == run.name
+            assert json.load(response) == {"run": None}
         with urlopen(base + f"/api/visual-report/runs/{run.name}") as response:
             assert json.load(response)["state"] == "RENDERED"
         with urlopen(base) as response:
@@ -114,6 +114,37 @@ def test_model_selection_is_saved_and_invalid_thinking_rejected(tmp_path, monkey
             urlopen(Request(endpoint, data=json.dumps(payload).encode()))
         assert error.value.code == 400
         assert len(list(tmp_path.glob("*/input.json"))) == 1
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+def test_all_history_survives_media_retention(tmp_path, monkeypatch):
+    from video_report_agent.retention import cleanup_media
+
+    monkeypatch.setenv("MEDIA_KEEP_LAST", "20")
+    for i in range(25):
+        run = tmp_path / f"history-{i:02}"
+        (run / "download").mkdir(parents=True)
+        (run / "download/source.m4a").write_bytes(b"audio")
+        (run / "report.html").write_text("report")
+        write_json(run / "status.json", {
+            "run_id": run.name, "state": "RENDERED",
+            "report_url": f"/reports/{run.name}/report.html",
+        })
+    cleanup_media(tmp_path)
+    assert len(list(tmp_path.glob("*/download/source.m4a"))) == 20
+    server = create_server(tmp_path, 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    try:
+        for endpoint, key in [("runs", "runs"), ("reports", "reports")]:
+            with urlopen(base + "/api/visual-report/" + endpoint) as response:
+                assert len(json.load(response)[key]) == 25
+        with urlopen(base + "/reports/history-00/report.html") as response:
+            assert response.read() == b"report"
     finally:
         server.shutdown()
         server.server_close()

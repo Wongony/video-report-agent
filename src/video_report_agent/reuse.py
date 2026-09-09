@@ -21,7 +21,7 @@ def previous_runs(run: Path, video_id: str):
             continue
 
 
-def reuse_download(source, run: Path, *, request_subtitles: bool):
+def reuse_download(source, run: Path, *, request_subtitles: bool, audio_only: bool = False):
     for candidate, metadata in previous_runs(run, source.video_id):
         # input metadata is written only after the downloader verifies its output.
         if not metadata.get("asr_model"):
@@ -30,6 +30,17 @@ def reuse_download(source, run: Path, *, request_subtitles: bool):
             continue
         directory = candidate / "download"
         media = directory / "source.mp4"
+        if audio_only:
+            media = next(
+                (path for path in sorted(directory.glob("source.*"))
+                 if path.suffix in {
+                     ".m4a", ".webm", ".opus", ".mp3", ".ogg", ".aac", ".flac", ".wav",
+                 }
+                 and path.is_file() and path.stat().st_size),
+                media,
+            )
+        elif metadata.get("download_audio_only"):
+            continue
         info = directory / "source.info.json"
         if not media.is_file() or not media.stat().st_size or not info.is_file():
             continue

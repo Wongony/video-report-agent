@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>使用统计 · Video Report</title>
+<style>
+:root{color-scheme:light;font-family:"Avenir Next","PingFang SC","Microsoft YaHei",sans-serif;color:#172033;background:#fff;font-variant-numeric:tabular-nums;--muted:#596579;--line:#dce5f2;--blue:#2859ca}
+*{box-sizing:border-box}body{margin:0;padding:40px 24px}main{max-width:1180px;margin:auto}header{display:flex;align-items:center;justify-content:space-between;gap:20px}h1{font-size:30px;letter-spacing:-.02em;margin:0}h2{font-size:20px;margin:32px 0 16px}p{line-height:1.7;color:var(--muted);max-width:75ch}a{color:var(--blue);text-underline-offset:4px}form,.controls{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin:24px 0}label{display:block;font-size:14px;margin-bottom:6px}input,button{font:inherit;min-height:44px;border-radius:8px;border:1px solid #bcc9dd;padding:9px 12px;background:white;color:inherit}input{max-width:100%}button{cursor:pointer;color:var(--blue);font-weight:600}button:hover{background:#eef4ff}button:disabled{opacity:.6;cursor:wait}:focus-visible{outline:3px solid var(--blue);outline-offset:3px}::selection{background:#dbe7ff}#key{width:300px}#message{min-height:24px;color:#a32739}dl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0 24px;margin:0}dl>div{padding:18px 0;border-top:1px solid var(--line)}dt{font-size:14px;color:var(--muted)}dd{margin:8px 0 0;font-size:27px;font-weight:600}.note{font-size:13px}#fees{display:flex;gap:48px;flex-wrap:wrap;border-block:1px solid var(--line);padding:20px 0}#fees p{margin:0}#fees strong{display:block;color:#172033;font-size:25px;margin-top:6px}.table-scroll{overflow:auto;scrollbar-color:#bcc9dd #fff}table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}th,td{padding:13px 12px;text-align:left;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:600}td small{display:block;color:var(--muted);margin-top:4px}caption{text-align:left;padding-bottom:12px;color:var(--muted)}[hidden]{display:none!important}#logout{margin-left:auto}@media(max-width:650px){body{padding:24px 16px}header{align-items:start}h1{font-size:26px}dl{grid-template-columns:repeat(2,minmax(0,1fr))}#fees{gap:24px}.controls>div{flex:1}input[type=date]{width:100%}}
+</style>
+</head>
+<body><main>
+<header><h1>使用统计</h1><a href="/">返回生成页</a></header>
+<p>查看访客人数、报告生成记录与调用费用。访客按浏览器标识去重，更换浏览器或清除 Cookie 会算作新访客。</p>
+<form id="login"><div><label for="key">管理员密钥</label><input id="key" type="password" required autocomplete="off" placeholder="输入 ADMIN_TOKEN"></div><button>查看统计</button></form>
+<p id="message" role="status" aria-live="polite"></p>
+<section id="dashboard" hidden>
+<form id="filters" class="controls"><div><label for="start">开始日期</label><input id="start" type="date"></div><div><label for="end">结束日期</label><input id="end" type="date"></div><button id="refresh">查询 / 刷新</button><button id="all" type="button">全部时间</button><button id="logout" type="button">退出</button></form>
+<p class="note" id="coverage"></p>
+<dl id="metrics"></dl>
+<h2>调用费用估算</h2>
+<div id="fees"><p>模型费用 · USD<strong id="llm-cost">—</strong></p><p>语音识别费用 · CNY<strong id="asr-cost">—</strong></p></div>
+<p class="note" id="cost-note"></p>
+<p class="note">金额是已知部分的估算，包含失败任务已发生的调用，不代表供应商账单。模型费用沿用 Pi 日志中的价格配置；语音识别按时长和配置单价估算。本地识别及转写复用的 API 费用计为 0，不含硬件、电费、OCR、连通性检查及其他未记录调用；不同币种不合并。</p>
+<h2>使用记录</h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="使用记录表格，可横向滚动"><table><caption id="table-caption"></caption><thead><tr><th scope="col">提交时间</th><th scope="col">访客 / 任务</th><th scope="col">视频</th><th scope="col">结果</th><th scope="col">处理耗时</th><th scope="col">模型调用</th><th scope="col">模型 USD</th><th scope="col">识别 CNY</th></tr></thead><tbody id="rows"></tbody></table></div>
+<p class="note">没有用户标识的历史任务保留在记录中，不计入访客人数。按任务提交日期筛选，处理耗时不含排队。</p>
+</section>
+</main><script>
+const $=id=>document.getElementById(id);
+let token='';
+const money=n=>n===null?'未知':n.toFixed(6);
+const date=n=>n===null||n===undefined?'时间未知':new Date(n*1000).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false});
+function cell(row,text,detail){const td=document.createElement('td');td.textContent=text;if(detail){const small=document.createElement('small');small.textContent=detail;td.append(small)}row.append(td)}
+async function refresh(){
+ $('message').textContent='正在读取统计…';$('refresh').disabled=true;
+ try{
+  const q=new URLSearchParams();if($('start').value)q.set('start',$('start').value);if($('end').value)q.set('end',$('end').value);
+  const response=await fetch('/api/admin/stats?'+q,{headers:{Authorization:'Bearer '+token}});
+  const data=await response.json();if(!response.ok)throw new Error(data.error||'读取失败，请重试');
+  $('dashboard').hidden=false;$('login').hidden=true;$('key').value='';
+  const s=data.summary;$('metrics').replaceChildren();
+  for(const [label,value] of [['访问人数',s.visitors],['提交过任务的人数',s.submitting_visitors],['页面访问次数',s.page_views],['报告任务数',s.tasks],['成功报告',s.successful_reports],['失败任务',s.failed_tasks],['排队 / 处理中',s.active_tasks],['生成成功率',s.success_rate===null?'—':(s.success_rate*100).toFixed(1)+'%']]){
+   const wrap=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;wrap.append(dt,dd);$('metrics').append(wrap);
+  }
+  $('coverage').textContent=`访问与提交记录从 ${date(data.tracking_since)} 开始累计；所选期间记录到 ${s.submission_attempts} 次提交尝试，其中 ${s.rejected_attempts} 次未受理。历史任务一并汇总，缺失的历史访问无法补算。日期按北京时间。`;
+  $('llm-cost').textContent=money(s.llm_usd_estimate);$('asr-cost').textContent=money(s.asr_cny_estimate);
+  $('cost-note').textContent=`模型已记录 ${s.llm_calls} 次调用、${s.tokens.toLocaleString()} tokens；${s.llm_unpriced_calls} 次调用金额未知，${s.llm_unrecorded_tasks} 个任务没有模型调用记录。${s.asr_unknown_tasks} 个任务的识别费用未知。识别单价：${data.asr_cny_per_second===null?'未配置':data.asr_cny_per_second+' 元/秒'}。`;
+  $('rows').replaceChildren();$('table-caption').textContent=s.tasks?`共 ${s.tasks} 个任务；${s.legacy_tasks_without_owner} 个历史任务无访客标识。`:'所选期间暂无任务记录。';
+  const states={RENDERED:'已生成',FAILED:'失败',QUEUED:'排队中',RUNNING:'处理中'};
+  for(const r of data.runs){const tr=document.createElement('tr');cell(tr,date(r.submitted_at));cell(tr,r.owner||'历史访客未知',r.run_id);cell(tr,r.video_id||'—');cell(tr,states[r.state]||r.state);cell(tr,r.elapsed_seconds===null?'—':Math.round(r.elapsed_seconds)+' 秒');cell(tr,r.llm_calls,r.tokens+' tokens');cell(tr,money(r.llm_usd_estimate),r.llm_unpriced_calls?`${r.llm_unpriced_calls} 次金额未知`:null);cell(tr,money(r.asr_cny_estimate),{local:'本地识别',reused:'复用转写',duration_estimate:'按时长估算',unknown:'金额未知'}[r.asr_basis]);$('rows').append(tr)}
+  $('message').textContent='';
+ }catch(error){$('message').textContent=error.message;$('dashboard').hidden=true;$('login').hidden=false}
+ finally{$('refresh').disabled=false}
+}
+$('login').addEventListener('submit',event=>{event.preventDefault();token=$('key').value;refresh()});
+$('filters').addEventListener('submit',event=>{event.preventDefault();refresh()});
+$('all').onclick=()=>{$('start').value='';$('end').value='';refresh()};
+$('logout').onclick=()=>{token='';$('rows').replaceChildren();$('metrics').replaceChildren();$('dashboard').hidden=true;$('login').hidden=false;$('message').textContent='已退出';$('key').focus()};
+</script></body></html>

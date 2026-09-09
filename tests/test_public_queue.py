@@ -59,7 +59,7 @@ def test_public_owner_isolation_admission_models_and_restart(tmp_path, monkeypat
     try:
         assert b'data-mode="public"' in request(a, base, "/")[1]
         request(b, base, "/")
-        for path, body in [("/api/models", None), ("/api/models", {}), ("/api/models/check", {})]:
+        for path, body in [("/api/models", None), ("/api/models", {}), ("/api/models/check", {"model": "injected"})]:
             assert request(a, base, path, body)[0] == 403
         assert (
             request(
@@ -71,11 +71,21 @@ def test_public_owner_isolation_admission_models_and_restart(tmp_path, monkeypat
         code, first = request(a, base, endpoint, {"url": "BV1aTtb6uE7d", "user_id": "forged"})
         assert code == 202
         first = json.loads(first)["run_id"]
-        code, second = request(a, base, endpoint, {"url": "BV1aTtb6uE7d"})
+        assert json.loads(request(a, base, "/api/visual-report/current")[1])["run"]["run_id"] == first
+        code, duplicate = request(a, base, endpoint, {
+            "url": "https://www.bilibili.com/video/BV1aTtb6uE7d/?p=1&share_source=copy"
+        })
+        assert code == 429
+        assert json.loads(duplicate)["error_category"] == "VIDEO_ALREADY_ACTIVE"
+        assert len(list(tmp_path.glob("*/queue.json"))) == 1
+        code, second = request(a, base, endpoint, {"url": "https://www.bilibili.com/video/BV1aTtb6uE7d/?p=2"})
         assert code == 202
         second = json.loads(second)
         assert second["queue_position"] == 1 and second["queued_ahead"] == 0
         assert second["running_count"] == 1
+        code, duplicate = request(a, base, endpoint, {"url": "https://www.bilibili.com/video/BV1aTtb6uE7d/?p=2"})
+        assert code == 429
+        assert json.loads(duplicate)["error_category"] == "VIDEO_ALREADY_ACTIVE"
         assert request(a, base, endpoint, {"url": "BV1aTtb6uE7d"})[0] == 429
         assert request(b, base, endpoint, {"url": "BV1aTtb6uE7d"})[0] == 429
         assert json.loads(request(b, base, endpoint)[1]) == {"runs": []}
@@ -83,17 +93,26 @@ def test_public_owner_isolation_admission_models_and_restart(tmp_path, monkeypat
         assert request(b, base, endpoint + "/" + first)[0] == 404
         assert request(a, base, endpoint + "/" + legacy.name)[0] == 404
         metadata = json.loads((tmp_path / first / "input.json").read_text())
-        assert "model_selection" not in metadata
+        assert metadata["model_selection"] == {
+            "provider": "deepseek",
+            "model": "deepseek-v4-flash-vision-exp",
+            "thinking": "low",
+        }
         owner = json.loads((tmp_path / first / "queue.json").read_text())["owner_id"]
         assert owner != "forged"
         release.set()
         wait_for(
             lambda: json.loads((tmp_path / first / "queue.json").read_text())["state"] == "RENDERED"
         )
+        wait_for(
+            lambda: json.loads((tmp_path / second["run_id"] / "queue.json").read_text())["state"] == "RENDERED"
+        )
+        assert json.loads(request(a, base, "/api/visual-report/current")[1]) == {"run": None}
         for path in [f"/reports/{first}/report.html", f"/reports/{first}/assets/test.txt"]:
             assert request(a, base, path)[0] == 200
             assert request(b, base, path)[0] == 404
         assert json.loads(request(b, base, "/api/visual-report/reports")[1]) == {"reports": []}
+        assert request(a, base, endpoint, {"url": "BV1aTtb6uE7d"})[0] == 202
         # A copied owner value with an invalid signature cannot access the task.
         forged = build_opener()
         try:
@@ -137,6 +156,36 @@ def test_local_model_endpoints_remain_available(tmp_path, monkeypatch):
         assert request(client, base, "/api/models")[0] == 200
         assert request(client, base, "/api/models", {})[0] == 201
         assert request(client, base, "/api/models/check", {})[0] == 200
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+@pytest.mark.parametrize("connected", [True, False])
+def test_public_connection_checks_only_fixed_model(tmp_path, monkeypatch, connected):
+    selections = []
+
+    def check(selection):
+        selections.append(selection)
+        return {"connected": connected, "error": "private diagnostic"}
+
+    monkeypatch.setattr("video_report_agent.web.check_connection", check)
+    server = create_server(tmp_path, 0, mode="public")
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    client = build_opener(HTTPCookieProcessor(CookieJar()))
+    try:
+        status, body = request(client, base, "/api/models/check", {})
+        assert status == 200
+        assert json.loads(body) == {"connected": connected}
+        assert selections == [{
+            "provider": "deepseek", "model": "deepseek-v4-flash-vision-exp", "thinking": "low",
+        }]
+        status, _ = request(client, base, "/api/models/check", {"model": "injected"})
+        assert status == 403
+        assert len(selections) == 1
     finally:
         server.shutdown()
         server.server_close()

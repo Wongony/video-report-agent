@@ -185,3 +185,16 @@ def test_legacy_without_backend_not_reused(completed):
     pipeline.write_json(previous / "input.json", old)
     run = pipeline.create_run(previous.parent, URL)
     assert reuse_transcript(run, metadata) is None
+
+
+def test_audio_download_reuse_does_not_supply_video_mode(completed):
+    previous, metadata = completed
+    (previous / "download/source.mp4").rename(previous / "download/source.m4a")
+    metadata["download_audio_only"] = True
+    pipeline.write_json(previous / "input.json", metadata)
+    run = pipeline.create_run(previous.parent, URL)
+    source = validate_bilibili_url(URL)
+    assert reuse_download(source, run, request_subtitles=False) == (None, None)
+    result, origin = reuse_download(source, run, request_subtitles=False, audio_only=True)
+    assert origin == previous.name
+    assert result.media_path.name == "source.m4a"

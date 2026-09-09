@@ -60,10 +60,17 @@ def _parse_bilibili_url(value: object) -> tuple[str, str, int, str]:
     if not isinstance(value, str):
         raise UrlIngestError("URL_INVALID", "url must be a string")
     submitted_url = value.strip()
+    # Bilibili's copied share text prefixes the link with a bracketed title.
+    link = re.sub(r"^【[^】]*】\s*", "", submitted_url, count=1).strip()
+    markdown_link = re.fullmatch(r"\[[^\]\r\n]*\]\(((?:https://|www\.)[^\s()]+)\)", link)
+    if markdown_link:
+        link = markdown_link.group(1)
+    if link.startswith("www."):
+        link = "https://" + link
     normalized_url = (
-        f"https://www.bilibili.com/video/{submitted_url}/"
-        if _BVID_PATTERN.fullmatch(submitted_url)
-        else submitted_url
+        f"https://www.bilibili.com/video/{link}/"
+        if _BVID_PATTERN.fullmatch(link)
+        else link
     )
     try:
         parsed = urlsplit(normalized_url)
@@ -179,6 +186,7 @@ def download_bilibili_video(
     *,
     runner: CommandRunner | None = None,
     request_subtitles: bool = False,
+    audio_only: bool = False,
 ) -> DownloadResult:
     """Run the yt-dlp command and verify its run-local output."""
 
@@ -198,20 +206,25 @@ def download_bilibili_video(
         str(download_dir),
         "-o",
         "source.%(ext)s",
-        "-S",
-        "res:1080,vcodec:h264,acodec:aac",
-        "--merge-output-format",
-        "mp4",
         "--write-info-json",
         "--print",
         "after_move:filepath",
     ]
+    if audio_only:
+        command.extend(["-f", "bestaudio"])
+    else:
+        command.extend(["-S", "res:1080,vcodec:h264,acodec:aac", "--merge-output-format", "mp4"])
     if request_subtitles:
         command.extend(["--write-subs", "--sub-langs", "all", "--sub-format", "srt/vtt/ass/best"])
     command.append(source.canonical_url)
     completed = _run_command(command, runner, category="DOWNLOAD_ERROR")
     (run_dir / "download.log").write_text(str(getattr(completed, "stderr", "")))
     if getattr(completed, "returncode", 1) != 0:
+        if "HTTP Error 412" in str(getattr(completed, "stderr", "")):
+            raise UrlIngestError(
+                "DOWNLOAD_ERROR",
+                "视频链接已识别，但 Bilibili 拒绝了下载请求（HTTP 412）。请稍后重试。",
+            )
         raise UrlIngestError("DOWNLOAD_ERROR", "yt-dlp failed")
     media_path = _inside(
         _printed_media_path(getattr(completed, "stdout", None), download_dir),
