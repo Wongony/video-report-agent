@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-mode="local">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -196,6 +196,9 @@
       .progress-fill, .step-dot { transition: none; }
       .progress-step.is-current .step-dot { animation: none; }
     }
+    html[data-mode="public"] .model-summary,
+    html[data-mode="public"] section[aria-label="模型设置"],
+    html[data-mode="public"] #model-dialog { display: none; }
   </style>
 </head>
 <body>
@@ -254,7 +257,7 @@
         <a id="report-link" class="report-link" href="#" target="_blank"
            rel="noreferrer" hidden>查看生成的报告</a>
       </div>
-      <button id="history-open" class="history-button" type="button">查看历史报告</button>
+      <button id="history-open" class="history-button" type="button">我的任务</button>
     </section>
     <dialog id="model-dialog" class="settings-dialog" aria-labelledby="model-title">
       <form id="model-form" class="settings-panel">
@@ -331,14 +334,14 @@
       <div class="settings-panel">
         <div class="settings-header">
           <div>
-            <h2 id="history-title">历史报告</h2>
-            <p class="settings-copy">这里汇总当前服务已经生成完成的视频报告。</p>
+            <h2 id="history-title">我的任务</h2>
+            <p class="settings-copy">这里汇总你的等待、运行和已结束任务。</p>
           </div>
           <button id="history-close" class="dialog-close" type="button"
-                  aria-label="关闭历史报告">×</button>
+                  aria-label="关闭我的任务">×</button>
         </div>
         <div id="history-list" class="history-list" aria-live="polite">
-          <p class="history-empty">正在读取历史报告…</p>
+          <p class="history-empty">正在读取我的任务…</p>
         </div>
       </div>
     </dialog>
@@ -509,9 +512,10 @@
         } catch (error) { saveError.textContent = error.message; }
         finally { saveButton.disabled = false; saveButton.textContent = '保存并选择'; }
       });
-      loadModels().catch(error => { loadError.textContent = error.message; });
+      const publicMode = document.documentElement.dataset.mode === 'public';
+      if (!publicMode) loadModels().catch(error => { loadError.textContent = error.message; });
       const labels = {
-        GENERATING: '正在生成报告', QUEUED: '等待处理',
+        GENERATING: '正在生成报告', QUEUED: '等待处理', STARTING: '准备开始',
         DOWNLOADING: '正在下载视频', TRANSCRIBING: '正在生成文字稿', OCR: '正在识别字幕',
         FUSING: '正在融合文字稿', READY: '已完成', DEGRADED: '文字稿已降级但可继续',
         RENDERED: '报告已生成', FAILED: '运行失败', CANCELLED: '运行已取消'
@@ -551,7 +555,8 @@
       }
 
       function showStatus(data) {
-        updateTimer(data);
+        updateTimer({ ...data, started_at: 'execution_started_at' in data
+          ? data.execution_started_at : data.started_at });
         const displayStage = data.stage || data.state || 'UNKNOWN';
         statusLabel.textContent = labels[displayStage] || '状态更新';
         statusCode.textContent = displayStage;
@@ -560,10 +565,10 @@
         const step = Number(progress.getAttribute('aria-valuenow'));
         const queued = displayStage === 'QUEUED';
         statusCode.textContent = data.state === 'RENDERED' ? '已完成' :
-          (queued ? `排队第 ${data.queue_position || 1} 位` : `第 ${step || 1}/4 步`);
+          (queued ? `排队第 ${data.queue_position ?? 1} 位` : `第 ${step || 1}/4 步`);
         statusDetail.textContent = queued ?
-          `当前正在处理任务 ${data.active_run_id || '未知'}；` +
-          `前面还有 ${data.queue_position || 1} 个任务。完成后会自动开始。` :
+          `前面有 ${data.queued_ahead ?? 0} 个等待任务；当前执行 ${data.running_count ?? 0} 个任务。` +
+          '按队列顺序和每人一个执行名额调度，轮到后自动开始。' :
           ((data.state === 'RENDERED' ? '报告已经生成，可以立即查看。' :
             '') +
           (data.error_category ? ` 错误类别：${data.error_category}。${data.error || ''}` : ''));
@@ -572,39 +577,38 @@
         if (data.report_url) reportLink.href = data.report_url;
         const terminal = ['RENDERED', 'FAILED', 'CANCELLED'].includes(data.state);
         statusBox.setAttribute('aria-busy', !terminal);
-        generate.disabled = !terminal;
-        if (terminal) {
-          generate.disabled = false;
-          polling = false;
-        }
+
+        if (terminal) polling = false;
       }
 
       async function pollRun() {
         if (!currentRunId || polling) return;
         polling = true;
+        const requestedRunId = currentRunId;
         try {
           const response = await fetch(
-            `/api/visual-report/runs/${encodeURIComponent(currentRunId)}`,
+            `/api/visual-report/runs/${encodeURIComponent(requestedRunId)}`,
             { headers: { 'Accept': 'application/json' } }
           );
           if (!response.ok) throw new Error('run_unavailable');
           const data = await response.json();
+          if (requestedRunId !== currentRunId) return;
           showStatus(data);
           if (!['RENDERED', 'FAILED', 'CANCELLED'].includes(data.state)) {
             polling = false;
             window.setTimeout(pollRun, 500);
           }
         } catch (error) {
+          if (requestedRunId !== currentRunId) return;
           polling = false;
           statusLabel.textContent = '状态暂时不可用';
           statusCode.textContent = 'WEB_ERROR';
           statusDetail.hidden = false;
           statusDetail.textContent = '请保留当前页面并稍后重试。';
-          generate.disabled = false;
         }
       }
 
-      async function restoreSharedRun() {
+      async function restoreOwnRun() {
         try {
           const response = await fetch('/api/visual-report/current', {
             headers: { 'Accept': 'application/json' }
@@ -625,39 +629,39 @@
 
       async function showHistory() {
         historyDialog.showModal();
-        historyList.innerHTML = '<p class="history-empty">正在读取历史报告…</p>';
+        historyList.innerHTML = '<p class="history-empty">正在读取我的任务…</p>';
         try {
-          const response = await fetch('/api/visual-report/reports', {
+          const response = await fetch('/api/visual-report/runs', {
             headers: { 'Accept': 'application/json' }
           });
           if (!response.ok) throw new Error('history_unavailable');
           const data = await response.json();
-          if (!data.reports.length) {
-            historyList.innerHTML = '<p class="history-empty">还没有生成完成的报告。</p>';
+          if (!data.runs.length) {
+            historyList.innerHTML = '<p class="history-empty">还没有提交任务。</p>';
             return;
           }
-          historyList.replaceChildren(...data.reports.map((report) => {
+          historyList.replaceChildren(...data.runs.map((report) => {
             const item = document.createElement('article');
             item.className = 'history-item';
             const copy = document.createElement('div');
             const title = document.createElement('p');
             title.className = 'history-title';
-            title.textContent = report.title;
+            title.textContent = report.title || report.video_id || report.run_id;
             const meta = document.createElement('p');
             meta.className = 'history-meta';
-            meta.textContent = report.video_id;
+            meta.textContent = `${report.video_id || ''} · ${labels[report.stage] || report.state}`;
             copy.append(title, meta);
             const link = document.createElement('a');
             link.className = 'history-link';
-            link.href = report.report_url;
+            link.href = report.report_url || `/?run_id=${encodeURIComponent(report.run_id)}`;
             link.target = '_blank';
             link.rel = 'noreferrer';
-            link.textContent = '打开报告';
+            link.textContent = report.report_url ? '打开报告' : '查看任务';
             item.append(copy, link);
             return item;
           }));
         } catch (error) {
-          historyList.innerHTML = '<p class="history-empty">历史报告暂时无法读取。</p>';
+          historyList.innerHTML = '<p class="history-empty">我的任务暂时无法读取。</p>';
         }
       }
 
@@ -665,7 +669,7 @@
         const submittedUrl = url.value.trim();
         if (generate.disabled || !submittedUrl) return;
         const model = modelCatalog.find(m => modelId(m) === modelSelect.value);
-        if (!model) { loadError.textContent = '请先配置并选择报告模型。'; return; }
+        if (!publicMode && !model) { loadError.textContent = '请先配置并选择报告模型。'; return; }
         const selectedSubtitle = subtitleFile.files[0] || null;
         const subtitleContent = selectedSubtitle ? await selectedSubtitle.text() : null;
         generate.disabled = true;
@@ -676,7 +680,7 @@
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({
               url: submittedUrl,
-              provider: model.provider, model: model.model, thinking: thinkingSelect.value,
+              ...(!publicMode ? { provider: model.provider, model: model.model, thinking: thinkingSelect.value } : {}),
               transcript_mode: transcriptMode.value,
               ocr_mode: ocrMode.value,
               ocr_roi: ocrRoi.value.trim() || null,
@@ -692,9 +696,15 @@
           pollRun();
         } catch (error) {
           statusLabel.textContent = '无法开始运行';
-          statusCode.textContent = String(error.message || 'REQUEST_ERROR');
+          statusCode.textContent = 'REQUEST_REJECTED';
           statusDetail.hidden = false;
-          statusDetail.textContent = '请检查 URL 或运行状态后重试。';
+          statusDetail.textContent = String(error.message || '请稍后重试。');
+          clearTimeout(toastTimeout);
+          toast.textContent = statusDetail.textContent;
+          document.body.append(toast);
+          toast.hidden = false;
+          toastTimeout = setTimeout(() => { toast.hidden = true; }, 6000);
+        } finally {
           generate.disabled = false;
         }
       }
@@ -720,7 +730,7 @@
       });
       const initialRunId = new URLSearchParams(window.location.search).get('run_id');
       if (initialRunId) { currentRunId = initialRunId; pollRun(); }
-      else { restoreSharedRun(); }
+      else { restoreOwnRun(); }
     })();
   </script>
 </body>

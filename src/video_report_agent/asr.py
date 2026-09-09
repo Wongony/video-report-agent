@@ -218,13 +218,16 @@ def transcribe_audio(
     backend: str = "mlx",
     base_url: str | None = None,
     parameters: dict | None = None,
+    task_path: Path | None = None,
 ) -> AsrRun:
     if backend == "mlx":
         return MlxWhisperBackend(model).transcribe(audio_path, language)
     if backend == "paraformer":
         from .paraformer import ParaformerBackend
 
-        return ParaformerBackend(model=model, base_url=base_url, parameters=parameters).transcribe(
+        return ParaformerBackend(
+            model=model, base_url=base_url, parameters=parameters, task_path=task_path
+        ).transcribe(
             audio_path, language
         )
     raise AsrError(f"Unknown ASR backend: {backend}")

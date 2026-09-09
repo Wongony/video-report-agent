@@ -14,7 +14,7 @@
 | 默认路径 | 使用 ASR 生成文字稿，关闭 OCR。 |
 | 可选路径 | 发现或导入字幕，再进行保守的本地 OCR 与 Fusion。 |
 | 输出 | 带时间戳的文字稿、来源溯源产物和自包含的 `report.html`。 |
-| 运行方式 | 本地工具；一个 worker 按顺序处理 run。 |
+| 运行方式 | 单服务器文件队列；默认并发 1，每个 owner 同时最多执行 1 个任务。 |
 | 报告模型 | Pi RPC 使用 `.env` 或 Web UI 选择的 Provider 和模型。 |
 
 ## 快速开始
@@ -56,6 +56,37 @@ uv run video-report web --port 8765
 ```
 
 打开 [http://127.0.0.1:8765](http://127.0.0.1:8765)，粘贴公开 Bilibili 链接或 BV 号，然后点击 **生成 Visual Report**。UI 会显示处理进度，可以选择报告模型，也会保留已完成报告的历史记录。
+
+### V1 多用户队列
+
+默认 `--mode local` 保留模型选择、配置和连接测试。Public 模式隐藏并禁止这些接口，
+任务统一使用服务器模型配置：
+
+```sh
+uv run video-report web --mode public --port 8765 \
+  --max-concurrency 1 --max-active-per-owner 2 --max-queue-length 20
+```
+
+默认监听 `127.0.0.1`；需要改变监听地址时使用 `--host`。在 HTTPS 反向代理后运行时，
+传入 `--public-origin https://你的域名`（不带末尾斜杠），用于 Origin 检查和 Secure cookie。
+这些参数是运行配置，命令不会配置代理或部署服务。
+
+- 文件 FIFO 队列先选择最早可执行的任务；同一 owner 已有任务运行时，暂时跳过其等待任务。
+  等待位置表示队列顺序，不保证并发任务的完成顺序。
+- 每个 owner 默认最多 2 个等待加运行任务，且固定最多 1 个运行任务；全局最多 20 个等待任务。
+  超限返回 `429`，页面显示原因。提高并发前需实测机器资源。
+- 服务端签发的持久 cookie 标识 owner；“我的任务”、状态、报告及 assets 按 owner 隔离。
+  清除 cookie 会失去原任务访问身份，也可以绕过 session 级上限；全局上限仍有效。
+- `runs/.session-key` 应与 runs 一起保留；不要公开或删除，否则原 cookie 无法验证。
+  同一个 runs 根目录只允许一个 Web 调度器，第二个实例会拒绝启动。
+- 每个 Web run 的 `queue.json` 持久化 owner、顺序和调度状态；`status.json` 保留执行阶段。
+  重启只恢复 `QUEUED`，不自动重跑中断的 `RUNNING`。没有队列记录的旧任务不自动执行，
+  仅在 Local 模式保留历史访问。CLI 直接生成不经过 Web 队列与准入限制。
+- 正常关闭停止领取等待任务，并等待已运行任务结束；未领取任务下次启动继续排队。
+- Paraformer 取得 task ID 后立即写入 `asr-task.json`；已有 ID 时拒绝重新提交，
+  本版不恢复云端轮询。云端已接收但 ID 尚未落盘的中断窗口仍存在。
+
+本版不包含阶段 checkpoint、RUNNING 自动恢复、账户计费或 OS 级多租户隔离。
 
 ### 使用 CLI
 
@@ -184,7 +215,7 @@ Web 服务启动时和每次生成结束后都会执行清理。清理只针对�
 - 默认转写路径要求 Apple Silicon macOS。Paraformer 路径不依赖 MLX；Linux 部署本身尚未验收。
 - 下载、音频提取和 ASR 在本机完成。报告生成需要把选定的数据交给模型 Provider，请根据来源内容选择合适的 Provider。
 - Pi 在 run 目录内使用标准的 `read`、`write`、`edit` 和 `bash` 工具。系统指令会限制预期工作范围，但这些工具不是操作系统级沙箱，技术上仍保留宿主机访问能力。
-- Web 服务重启时，未完成的 run 会标记为失败；已完成报告仍保留在 run 根目录中。
+- Web 重启恢复已入队的 `QUEUED` 任务；中断的 `RUNNING` 任务标记为 `FAILED / SERVER_INTERRUPTED`，不自动重跑。终态任务保持不动。
 - 生成的 HTML 通过带 sandbox CSP 的方式提供服务。当前应用不宣称具备部署级隔离能力。
 
 ## 开发检查

@@ -18,6 +18,12 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     web = sub.add_parser("web")
     web.add_argument("--port", type=int, default=8765)
+    web.add_argument("--host", default="127.0.0.1")
+    web.add_argument("--mode", choices=["local", "public"], default="local")
+    web.add_argument("--public-origin", help="External origin, e.g. https://reports.example.com")
+    web.add_argument("--max-concurrency", type=int, default=1)
+    web.add_argument("--max-active-per-owner", type=int, default=2)
+    web.add_argument("--max-queue-length", type=int, default=20)
     run = sub.add_parser("generate")
     run.add_argument("url")
     run.add_argument("--transcript-mode", choices=["asr-only", "fused"], default="asr-only")
@@ -52,8 +58,12 @@ def main():
         )
         print(json.dumps(status, ensure_ascii=False, indent=2))
         return 0 if status["state"] == "RENDERED" else 1
-    server = create_server(args.runs, args.port)
-    print(f"Video Report: http://127.0.0.1:{server.server_port}", flush=True)
+    server = create_server(
+        args.runs, args.port, mode=args.mode, host=args.host, public_origin=args.public_origin,
+        max_concurrency=args.max_concurrency, max_active_per_owner=args.max_active_per_owner,
+        max_queue_length=args.max_queue_length,
+    )
+    print(f"Video Report: http://{args.host}:{server.server_port}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -14,7 +14,7 @@ Turn a public Bilibili video into a self-contained HTML reading report on Apple 
 | Default path | ASR-only transcription with OCR disabled. |
 | Optional path | Subtitle discovery/import plus conservative local OCR and Fusion. |
 | Output | A timestamped transcript, provenance artifacts, and a self-contained `report.html`. |
-| Runtime | Local macOS tool; one worker processes runs sequentially. |
+| Runtime | Single-server file queue; concurrency defaults to 1, with at most one running task per owner. |
 | Report model | Pi RPC calls the provider and model selected in `.env` or the web UI. |
 
 ## Quick start
@@ -56,6 +56,44 @@ uv run video-report web --port 8765
 ```
 
 Open [http://127.0.0.1:8765](http://127.0.0.1:8765), paste a public Bilibili URL or BV number, and click **生成 Visual Report**. The UI shows progress, lets you select the report model, and keeps a history of completed reports.
+
+### V1 multi-user queue
+
+The default `--mode local` retains model selection, configuration, and connection tests.
+Public mode hides and blocks those endpoints and uses the server model configuration:
+
+```sh
+uv run video-report web --mode public --port 8765 \
+  --max-concurrency 1 --max-active-per-owner 2 --max-queue-length 20
+```
+
+The default bind address is `127.0.0.1`; use `--host` to change it. Behind an HTTPS reverse
+proxy, set `--public-origin https://your-domain` (no trailing slash) for Origin checks and
+Secure cookies. These options do not configure a proxy or deploy the service.
+
+- FIFO selects the oldest eligible task, skipping owners who already have a running task.
+  Queue position describes waiting order, not concurrent completion order.
+- Defaults: 2 queued plus running tasks per owner, a fixed 1 running task per owner, and
+  20 globally queued tasks. Excess submissions receive `429` with a visible reason.
+  Measure server resources before increasing concurrency.
+- Signed persistent cookies identify owners. Task lists, status, reports, and assets are
+  owner-scoped. Clearing cookies loses access to prior tasks and can bypass the session
+  limit; the global queue limit still applies.
+- Preserve `runs/.session-key` with the runs directory and keep it private. Deleting it
+  invalidates existing cookies. A file lock rejects a second Web scheduler on the same root.
+- Each Web run has a `queue.json` for ownership, order, and scheduling state; `status.json`
+  retains pipeline stages. Restart restores `QUEUED` tasks in order. Interrupted `RUNNING`
+  tasks become `FAILED / SERVER_INTERRUPTED` without rerunning; terminal tasks stay unchanged.
+  Legacy tasks without queue records are not scheduled and are accessible only in Local mode.
+  Direct CLI generation bypasses the Web queue and admission limits.
+- Graceful shutdown stops taking queued work and waits for running tasks; unstarted work
+  stays queued for the next startup.
+- Paraformer saves its task ID to `asr-task.json` immediately after receiving it and refuses
+  another submission when an ID exists. Resuming cloud polling is deferred. An interruption
+  after cloud acceptance but before saving the ID remains an unresolved window.
+
+V1 does not provide stage checkpoints, automatic RUNNING recovery, account billing, or
+OS-level tenant isolation.
 
 ### Run from the CLI
 
@@ -184,7 +222,7 @@ Set either limit to `0` to disable that limit. When both limits are enabled, med
 - The default transcription path requires Apple Silicon macOS. The Paraformer path does not require MLX; Linux deployment itself has not been validated.
 - Downloading, audio extraction, and ASR happen locally. The selected model provider receives the data needed for report generation, so choose a provider appropriate for the source material.
 - Pi runs with standard `read`, `write`, `edit`, and `bash` tools inside the run directory. The system prompt narrows its intended scope, but these tools are not an operating-system sandbox and technically retain host access.
-- Restarting the web service marks unfinished runs as failed. Completed reports remain available under the run root.
+- Restart restores queued Web runs in order. Interrupted running tasks become `FAILED / SERVER_INTERRUPTED` without rerunning; terminal tasks stay unchanged.
 - Generated HTML is served with a sandbox CSP. The application does not claim deployment-grade isolation.
 
 ## Development checks

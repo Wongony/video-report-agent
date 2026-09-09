@@ -1,5 +1,6 @@
 """Beijing Paraformer file recognition; one submission, no automatic resubmit."""
 
+import json
 import os
 import time
 from pathlib import Path
@@ -35,9 +36,11 @@ class ParaformerBackend:
         parameters=None,
         wait_seconds=1800,
         poll_seconds=5,
+        task_path=None,
     ):
         if model != self.default_model:
             raise ValueError("paraformer backend requires paraformer-v2")
+        self.task_path = task_path
         self.model = model
         self.base_url = base_url or DEFAULT_BASE_URL
         self.api_key = os.getenv("DASHSCOPE_API_KEY", "").strip()
@@ -49,6 +52,10 @@ class ParaformerBackend:
         self.poll_seconds = poll_seconds
 
     def transcribe(self, audio_path: Path, language="zh") -> AsrRun:
+        if self.task_path is not None and self.task_path.exists():
+            saved = json.loads(self.task_path.read_text())
+            if saved.get("task_id"):
+                raise CloudAsrError("existing_task", "已有云端任务；未重新提交", saved["task_id"])
         if language != "zh":
             raise AsrError("ASR requires explicit Chinese language")
         if not audio_path.is_file() or not audio_path.stat().st_size:
@@ -117,6 +124,10 @@ class ParaformerBackend:
                 task_id = submitted.get("output", {}).get("task_id")
             except (ValueError, AttributeError):
                 submitted = {}
+            if task_id and self.task_path is not None:
+                from .pipeline import write_json
+
+                write_json(self.task_path, {"task_id": task_id})
             if response.status_code >= 500 or (response.is_success and not task_id):
                 raise CloudAsrError("submit_unknown", "提交状态未知；未自动重新提交", task_id)
             response.raise_for_status()

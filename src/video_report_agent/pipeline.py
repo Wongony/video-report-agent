@@ -127,6 +127,7 @@ def generate(run: Path) -> dict:
                 base_url=metadata["asr_base_url"],
                 language=metadata["asr_language"],
                 parameters=metadata["asr_parameters"],
+                task_path=run / "asr-task.json",
             )
             write_json(run / "asr.json", asr.to_dict())
             options = argparse.Namespace(
