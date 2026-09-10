@@ -11,10 +11,11 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from .analytics import Analytics, number
+from .execution import generate
 from .ingest import UrlIngestError, validate_bilibili_url
 from .model_config import catalog, check_connection, save_model, validate_selection
 from .pi import DEFAULT_MODEL, DEFAULT_PROVIDER, DEFAULT_THINKING
-from .pipeline import create_run, generate, write_json
+from .pipeline import create_run, write_json
 from .queue import AdmissionError, RunQueue
 from .report_image import REPORT_CSP, render_report_image
 from .retention import cleanup_media
@@ -48,9 +49,22 @@ def create_server(
             raise ValueError("public_origin must be an HTTP(S) origin without a path")
     root = root.resolve()
     root.mkdir(parents=True, exist_ok=True)
+
+    def execute(run):
+        # Apply the policy to recovered queued tasks as well as new HTTP submissions.
+        if mode == "public":
+            metadata = json.loads((run / "input.json").read_text())
+            if (
+                metadata.get("transcript_mode", "asr-only") != "asr-only"
+                or metadata.get("ocr_mode", "off") != "off"
+                or metadata.get("subtitle_file") is not None
+            ):
+                raise ValueError("Public 仅支持 ASR，已关闭 OCR 和融合。")
+        return generate(run)
+
     queue = RunQueue(
         root,
-        generate,
+        execute,
         max_concurrency=max_concurrency,
         max_active_per_owner=max_active_per_owner,
         max_queue_length=max_queue_length,
@@ -235,6 +249,14 @@ def create_server(
                     "model": DEFAULT_MODEL,
                     "thinking": DEFAULT_THINKING,
                 }
+                if mode == "public" and (
+                    data.get("transcript_mode", "asr-only") != "asr-only"
+                    or data.get("ocr_mode", "off") != "off"
+                    or data.get("ocr_roi") is not None
+                    or data.get("subtitle_content") is not None
+                    or data.get("subtitle_file") is not None
+                ):
+                    return self.send(403, {"error": "Public 仅支持 ASR，已关闭 OCR 和融合。"})
                 if data.get("subtitle_content") is not None:
                     suffix = Path(data.get("subtitle_name") or "").suffix.lower()
                     if suffix not in {".srt", ".vtt", ".ass"} or not isinstance(

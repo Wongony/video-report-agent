@@ -20,7 +20,9 @@ def completed(tmp_path):
     pipeline.write_json(run / "input.json", metadata)
     (run / "download").mkdir()
     (run / "download/source.mp4").write_bytes(b"video")
-    pipeline.write_json(run / "download/source.info.json", {"title": "Test", "uploader": "UP"})
+    pipeline.write_json(
+        run / "download/source.info.json", {"title": "Test", "uploader": "UP", "duration": 60}
+    )
     unit = {"unit_id": "unit-000001", "start_ms": 0, "end_ms": 1000, "canonical_text": "hello"}
     (run / "canonical-transcript.jsonl").write_text(json.dumps(unit) + "\n")
     (run / "source-text-events.jsonl").write_text("{}\n")

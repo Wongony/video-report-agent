@@ -190,3 +190,40 @@ def test_public_connection_checks_only_fixed_model(tmp_path, monkeypatch, connec
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+def test_public_rejects_ocr_fusion_and_subtitles(tmp_path, monkeypatch):
+    monkeypatch.setattr("video_report_agent.web.generate", lambda _: pytest.fail("generation"))
+    server = create_server(tmp_path, 0, mode="public")
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    client = build_opener(HTTPCookieProcessor(CookieJar()))
+    base = f"http://127.0.0.1:{server.server_port}"
+    try:
+        for extra in [
+            {"transcript_mode": "fused"}, {"ocr_mode": "auto"}, {"ocr_mode": "roi"},
+            {"ocr_roi": "0,0,1,1"}, {"subtitle_content": "text"},
+            {"subtitle_file": "subtitle.srt"},
+        ]:
+            assert request(client, base, "/api/visual-report/runs", {
+                "url": "BV1aTtb6uE7d", **extra,
+            })[0] == 403
+        assert not list(tmp_path.glob("*/input.json"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+def test_public_rejects_recovered_fusion_task(tmp_path, monkeypatch):
+    run = create_run(tmp_path, "BV1aTtb6uE7d", transcript_mode="fused")
+    write_json(run / "queue.json", {
+        "owner_id": "test-owner", "queue_seq": 1, "state": "QUEUED",
+    })
+    monkeypatch.setattr("video_report_agent.web.generate", lambda _: pytest.fail("generation"))
+    server = create_server(tmp_path, 0, mode="public")
+    try:
+        wait_for(lambda: json.loads((run / "queue.json").read_text())["state"] == "FAILED")
+        assert "Public" in json.loads((run / "status.json").read_text())["error"]
+    finally:
+        server.server_close()

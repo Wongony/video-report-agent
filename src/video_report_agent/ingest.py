@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -15,6 +16,7 @@ BILIBILI_HOSTS = frozenset({"bilibili.com", "www.bilibili.com"})
 _BVID_PATTERN = re.compile(r"BV[0-9A-Za-z]{10}")
 _PAGE_PATTERN = re.compile(r"[0-9]+")
 _SOURCE_NAME = "source"
+MAX_VIDEO_SECONDS = 3 * 60 * 60
 
 CommandRunner = Callable[..., Any]
 
@@ -168,6 +170,14 @@ def _metadata(info_path: Path, source: BilibiliSource) -> tuple[str, str, str]:
         raise UrlIngestError("DOWNLOAD_ERROR", "yt-dlp metadata is unavailable") from exc
     if not isinstance(payload, dict):
         raise UrlIngestError("DOWNLOAD_ERROR", "yt-dlp metadata is invalid")
+    duration = payload.get("duration")
+    if (
+        isinstance(duration, bool) or not isinstance(duration, (int, float))
+        or not math.isfinite(duration) or duration <= 0
+    ):
+        raise UrlIngestError("VIDEO_DURATION_INVALID", "无法确认视频时长，不能处理此视频。")
+    if duration > MAX_VIDEO_SECONDS:
+        raise UrlIngestError("VIDEO_TOO_LONG", "单个视频最长支持 3 小时。")
     title = payload.get("title")
     uploader = payload.get("uploader") or payload.get("channel")
     if not isinstance(title, str) or not title.strip():
@@ -202,6 +212,9 @@ def download_bilibili_video(
         executable,
         "--ignore-config",
         "--no-playlist",
+        "--match-filter",
+        f"duration <= {MAX_VIDEO_SECONDS}",
+        "--break-on-reject",
         "-P",
         str(download_dir),
         "-o",
@@ -219,6 +232,10 @@ def download_bilibili_video(
     command.append(source.canonical_url)
     completed = _run_command(command, runner, category="DOWNLOAD_ERROR")
     (run_dir / "download.log").write_text(str(getattr(completed, "stderr", "")))
+    if not str(getattr(completed, "stdout", "")).strip() and "does not pass filter" in str(
+        getattr(completed, "stderr", "")
+    ):
+        raise UrlIngestError("VIDEO_DURATION_INVALID", "视频超过 3 小时或无法确认时长。")
     if getattr(completed, "returncode", 1) != 0:
         if "HTTP Error 412" in str(getattr(completed, "stderr", "")):
             raise UrlIngestError(

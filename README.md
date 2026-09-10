@@ -75,6 +75,12 @@ The default bind address is `127.0.0.1`; use `--host` to change it. Behind an HT
 proxy, set `--public-origin https://your-domain` (no trailing slash) for Origin checks and
 Secure cookies. These options do not configure a proxy or deploy the service.
 
+Videos must be at most 3 hours long, including reused downloads; unknown durations are rejected.
+Web and CLI tasks have a 30-minute total execution deadline, excluding queue time.
+Timeout kills the local process group and marks the task failed; already-submitted cloud ASR
+may continue and incur charges. Public rejects OCR, fusion, and subtitle imports, including
+recovered queued tasks. These features remain available in Local mode.
+
 - FIFO selects the oldest eligible task, skipping owners who already have a running task.
   Queue position describes waiting order, not concurrent completion order.
 - Defaults: 2 queued plus running tasks per owner, a fixed 1 running task per owner, and

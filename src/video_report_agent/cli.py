@@ -6,8 +6,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from .execution import generate
 from .pi import PROJECT_ROOT
-from .pipeline import create_run, generate
+from .pipeline import create_run
 from .web import create_server
 
 

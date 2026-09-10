@@ -114,7 +114,7 @@ def test_download_selects_audio_only_when_requested(tmp_path, monkeypatch, audio
         media = tmp_path / "download" / ("source.m4a" if audio_only else "source.mp4")
         media.write_bytes(b"media")
         (media.parent / "source.info.json").write_text(
-            json.dumps({"title": "Title", "uploader": "UP"})
+            json.dumps({"title": "Title", "uploader": "UP", "duration": 60})
         )
         return SimpleNamespace(returncode=0, stderr="", stdout=str(media))
 
@@ -122,3 +122,19 @@ def test_download_selects_audio_only_when_requested(tmp_path, monkeypatch, audio
         validate_bilibili_url(URL), tmp_path, runner=runner, audio_only=audio_only
     )
     assert result.media_path.suffix == (".m4a" if audio_only else ".mp4")
+
+
+@pytest.mark.parametrize("duration,allowed", [(10800, True), (10800.1, False), (None, False)])
+def test_duration_limit(tmp_path, duration, allowed):
+    from video_report_agent.ingest import _metadata
+    from yt_dlp.utils import match_filter_func
+
+    info = {"title": "Test", "uploader": "UP", "duration": duration}
+    assert (match_filter_func("duration <= 10800")(info) is None) == allowed
+    path = tmp_path / "info.json"
+    path.write_text(json.dumps(info))
+    if allowed:
+        assert _metadata(path, validate_bilibili_url(URL))[0] == "Test"
+    else:
+        with pytest.raises(UrlIngestError):
+            _metadata(path, validate_bilibili_url(URL))
