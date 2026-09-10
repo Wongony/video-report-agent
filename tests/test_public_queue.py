@@ -24,6 +24,8 @@ def request(client, base, path, body=None):
 
 
 def test_public_owner_isolation_admission_models_and_restart(tmp_path, monkeypatch):
+    monkeypatch.setenv("PI_PROVIDER", "deployment-provider")
+    monkeypatch.setenv("PI_MODEL", "deployment-model")
     release = threading.Event()
 
     def generate(run):
@@ -94,8 +96,8 @@ def test_public_owner_isolation_admission_models_and_restart(tmp_path, monkeypat
         assert request(a, base, endpoint + "/" + legacy.name)[0] == 404
         metadata = json.loads((tmp_path / first / "input.json").read_text())
         assert metadata["model_selection"] == {
-            "provider": "deepseek",
-            "model": "deepseek-v4-flash-vision-exp",
+            "provider": "deployment-provider",
+            "model": "deployment-model",
             "thinking": "low",
         }
         owner = json.loads((tmp_path / first / "queue.json").read_text())["owner_id"]
@@ -164,6 +166,8 @@ def test_local_model_endpoints_remain_available(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("connected", [True, False])
 def test_public_connection_checks_only_fixed_model(tmp_path, monkeypatch, connected):
+    monkeypatch.setenv("PI_PROVIDER", "deployment-provider")
+    monkeypatch.setenv("PI_MODEL", "deployment-model")
     selections = []
 
     def check(selection):
@@ -181,7 +185,7 @@ def test_public_connection_checks_only_fixed_model(tmp_path, monkeypatch, connec
         assert status == 200
         assert json.loads(body) == {"connected": connected}
         assert selections == [{
-            "provider": "deepseek", "model": "deepseek-v4-flash-vision-exp", "thinking": "low",
+            "provider": "deployment-provider", "model": "deployment-model", "thinking": "low",
         }]
         status, _ = request(client, base, "/api/models/check", {"model": "injected"})
         assert status == 403

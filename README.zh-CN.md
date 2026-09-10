@@ -4,6 +4,8 @@
 
 在 Apple Silicon macOS 上，把公开视频转换为可直接打开的 HTML 精读报告。
 
+Windows 使用 Docker Linux + Paraformer + Cloudflare Tunnel，详见 [部署说明](DEPLOYMENT.md)。
+
 > `Bilibili URL → yt-dlp → FFmpeg → MLX Whisper → Canonical Transcript → Pi RPC → report.html`
 
 ## 项目概览

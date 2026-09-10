@@ -4,6 +4,8 @@
 
 Turn a public Bilibili video into a self-contained HTML reading report on Apple Silicon macOS.
 
+For Windows via Docker Linux, Paraformer and Cloudflare Tunnel, see [deployment instructions](DEPLOYMENT.md).
+
 > `Bilibili URL → yt-dlp → FFmpeg → MLX Whisper → Canonical Transcript → Pi RPC → report.html`
 
 ## At a glance

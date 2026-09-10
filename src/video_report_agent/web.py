@@ -38,6 +38,11 @@ def create_server(
 ) -> ThreadingHTTPServer:
     if mode not in {"local", "public"}:
         raise ValueError("mode must be local or public")
+    public_model = {
+        "provider": os.getenv("PI_PROVIDER", DEFAULT_PROVIDER),
+        "model": os.getenv("PI_MODEL", DEFAULT_MODEL),
+        "thinking": DEFAULT_THINKING,
+    }
     admin_token = os.getenv("ADMIN_TOKEN", "").strip()
     rate = os.getenv("ASR_CNY_PER_SECOND", "").strip()
     asr_rate = float(rate) if rate else None
@@ -228,11 +233,7 @@ def create_server(
                     if mode == "public":
                         if data:
                             return self.send(403, {"error": "Public model configuration is fixed"})
-                        result = check_connection({
-                            "provider": DEFAULT_PROVIDER,
-                            "model": DEFAULT_MODEL,
-                            "thinking": DEFAULT_THINKING,
-                        })
+                        result = check_connection(public_model.copy())
                         return self.send(200, {"connected": result["connected"]})
                     return self.send(200, check_connection(data))
                 if self.path == "/api/models":
@@ -244,11 +245,7 @@ def create_server(
                     return self.send(
                         403, {"error": "Public tasks use the server model configuration"}
                     )
-                selection = validate_selection(data) if mode == "local" else {
-                    "provider": DEFAULT_PROVIDER,
-                    "model": DEFAULT_MODEL,
-                    "thinking": DEFAULT_THINKING,
-                }
+                selection = validate_selection(data) if mode == "local" else public_model.copy()
                 if mode == "public" and (
                     data.get("transcript_mode", "asr-only") != "asr-only"
                     or data.get("ocr_mode", "off") != "off"
