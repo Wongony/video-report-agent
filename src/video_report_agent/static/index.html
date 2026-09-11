@@ -675,16 +675,22 @@
         historyDialog.showModal();
         historyList.innerHTML = '<p class="history-empty">正在读取历史报告…</p>';
         try {
-          const response = await fetch('/api/visual-report/runs', {
-            headers: { 'Accept': 'application/json' }
-          });
-          if (!response.ok) throw new Error('history_unavailable');
-          const data = await response.json();
-          if (!data.runs.length) {
+          const endpoints = publicMode
+            ? ['/api/visual-report/runs', '/api/visual-report/reports']
+            : ['/api/visual-report/runs'];
+          const results = await Promise.all(endpoints.map(async endpoint => {
+            const response = await fetch(endpoint, { headers: { 'Accept': 'application/json' } });
+            if (!response.ok) throw new Error('history_unavailable');
+            return response.json();
+          }));
+          const reports = [...new Map(results.flatMap(data => data.runs || data.reports)
+            .map(report => [report.run_id, report])).values()]
+            .sort((a, b) => (b.queue_seq || 0) - (a.queue_seq || 0));
+          if (!reports.length) {
             historyList.innerHTML = '<p class="history-empty">还没有提交任务。</p>';
             return;
           }
-          historyList.replaceChildren(...data.runs.map((report) => {
+          historyList.replaceChildren(...reports.map((report) => {
             const item = document.createElement('article');
             item.className = 'history-item';
             const copy = document.createElement('div');
