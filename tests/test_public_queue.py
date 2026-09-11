@@ -23,7 +23,7 @@ def request(client, base, path, body=None):
         return response.status, response.read()
 
 
-def test_public_owner_isolation_admission_models_and_restart(tmp_path, monkeypatch):
+def test_public_shared_reports_owner_admission_models_and_restart(tmp_path, monkeypatch):
     monkeypatch.setenv("PI_PROVIDER", "deployment-provider")
     monkeypatch.setenv("PI_MODEL", "deployment-model")
     release = threading.Event()
@@ -112,8 +112,11 @@ def test_public_owner_isolation_admission_models_and_restart(tmp_path, monkeypat
         assert json.loads(request(a, base, "/api/visual-report/current")[1]) == {"run": None}
         for path in [f"/reports/{first}/report.html", f"/reports/{first}/assets/test.txt"]:
             assert request(a, base, path)[0] == 200
-            assert request(b, base, path)[0] == 404
-        assert json.loads(request(b, base, "/api/visual-report/reports")[1]) == {"reports": []}
+            assert request(b, base, path)[0] == 200
+        reports = json.loads(request(b, base, "/api/visual-report/reports")[1])["reports"]
+        assert {r["run_id"] for r in reports} == {first, second["run_id"], legacy.name}
+        for private_file in ["input.json", "queue.json", "status.json"]:
+            assert request(b, base, f"/reports/{first}/{private_file}")[0] == 404
         assert request(a, base, endpoint, {"url": "BV1aTtb6uE7d"})[0] == 202
         # A copied owner value with an invalid signature cannot access the task.
         forged = build_opener()
@@ -137,7 +140,7 @@ def test_public_owner_isolation_admission_models_and_restart(tmp_path, monkeypat
     base = f"http://127.0.0.1:{server.server_port}"
     try:
         assert request(a, base, f"/reports/{first}/report.html")[0] == 200
-        assert request(b, base, f"/reports/{first}/report.html")[0] == 404
+        assert request(b, base, f"/reports/{first}/report.html")[0] == 200
     finally:
         server.shutdown()
         server.server_close()

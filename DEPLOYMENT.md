@@ -73,7 +73,7 @@ docker compose --env-file .env.docker -p video-report-acceptance cp app:/app/run
 验收至少检查：
 
 - Linux x86_64、Pi 0.85.0、FFmpeg 和 Chromium 可执行。
-- Public 页面可访问，模型配置接口返回 403，第二个浏览器身份看不到第一个身份的报告。
+- Public 页面可访问，模型配置接口返回 403，不同浏览器身份均可查看所有已完成的历史报告；排队和运行中的任务仍按浏览器身份隔离。
 - 新任务 `status.json` 为 `RENDERED`；`transcript_reused_from` 为空，`asr.json` 为 Paraformer，存在 `asr-task.json`；无 `image_error`，`report.html` 和 `report.png` 存在。
 - 停止并重新启动容器后，用原 Cookie 仍能读取报告；`runs/.session-key` 和报告随数据卷保留。
 - Windows 上再重复一次真实短视频生成；macOS Linux 容器通过不等于 Windows 或公网验收通过。

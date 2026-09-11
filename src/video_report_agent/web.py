@@ -87,16 +87,16 @@ def create_server(
         def identify(self):
             self.owner, self.owner_cookie = sessions.identify(self.headers.get("Cookie"))
 
-        def statuses(self):
-            statuses = queue.statuses(self.owner)
-            # Owner-less historical runs remain available only in local mode.
-            if mode == "local":
+        def statuses(self, *, shared_reports=False):
+            statuses = queue.statuses(self.owner, shared_reports=shared_reports)
+            # Public history also includes completed runs created before owner tracking.
+            if mode == "local" or shared_reports:
                 for path in root.glob("*/status.json"):
                     if (path.parent / "queue.json").exists():
                         continue
                     try:
                         item = json.loads(path.read_text())
-                        if item.get("run_id"):
+                        if item.get("run_id") and (mode == "local" or item.get("state") == "RENDERED"):
                             statuses.append(item)
                     except (OSError, ValueError):
                         continue
@@ -169,7 +169,10 @@ def create_server(
                     return self.send(200, catalog())
                 except ValueError as exc:
                     return self.send(503, {"error": str(exc)})
-            statuses = self.statuses()
+            statuses = self.statuses(shared_reports=(
+                mode == "public"
+                and (path == "/api/visual-report/reports" or path.startswith("/reports/"))
+            ))
             if path == "/api/visual-report/current":
                 active = [s for s in statuses if s["state"] in {"QUEUED", "RUNNING"}]
                 return self.send(200, {"run": (active or [None])[0]})

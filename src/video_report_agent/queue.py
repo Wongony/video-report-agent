@@ -176,12 +176,14 @@ class RunQueue:
                 self.running.discard(run_id)
                 self._dispatch()
 
-    def statuses(self, owner_id):
+    def statuses(self, owner_id, *, shared_reports=False):
         with self.lock:
             positions = {r: i + 1 for i, r in enumerate(self.waiting)}
             result = []
             for run_id, record in self.records.items():
-                if record["owner_id"] != owner_id:
+                if record["owner_id"] != owner_id and not (
+                    shared_reports and record["state"] == "RENDERED"
+                ):
                     continue
                 try:
                     status = json.loads((self.root / run_id / "status.json").read_text())
