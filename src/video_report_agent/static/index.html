@@ -23,6 +23,23 @@
     main { width: min(760px, 100%); margin: 0 auto; display: flex; flex-direction: column; }
     main > .card { flex: 1; display: flex; flex-direction: column; }
     main > .card > .history-button { margin-top: auto; }
+    .page-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .github-support {
+      position: relative; display: inline-flex; align-items: center; gap: 7px;
+      margin-left: auto; min-height: 36px; padding: 0 12px; border: 1px solid var(--line);
+      border-radius: 999px; color: #526079; background: #f8faff;
+      font-size: 13px; font-weight: 700; text-decoration: none; white-space: nowrap;
+    }
+    .github-support svg { width: 17px; height: 17px; fill: currentColor; }
+    .github-support:hover { color: var(--blue); border-color: #b8c9ed; background: var(--blue-soft); }
+    .github-tooltip {
+      position: absolute; top: 100%; right: 0; z-index: 10; width: max-content;
+      max-width: calc(100vw - 32px); padding: 9px 12px; border-radius: 8px;
+      background: var(--ink); color: #fff; font-size: 12px; font-weight: 400;
+      line-height: 1.5; white-space: normal; visibility: hidden;
+    }
+    .github-support:hover .github-tooltip,
+    .github-support:focus-visible .github-tooltip { visibility: visible; }
     .eyebrow {
       color: var(--blue); font-size: 12px; font-weight: 750; letter-spacing: .14em;
       text-transform: uppercase;
@@ -207,7 +224,16 @@
 </head>
 <body>
   <main>
-    <div class="eyebrow">Video Visual Report · Local MVP</div>
+    <div class="page-topbar">
+      <div class="eyebrow">Video Visual Report</div>
+      <a class="github-support" href="https://github.com/imexlovery/video-report-agent"
+         target="_blank" rel="noopener noreferrer" aria-label="支持一下 GitHub 项目" aria-describedby="github-tooltip">
+        <span aria-hidden="true">↗</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .75a11.25 11.25 0 0 0-3.558 21.923c.563.104.768-.244.768-.542 0-.267-.01-.974-.015-1.912-3.13.68-3.79-1.508-3.79-1.508-.512-1.3-1.25-1.646-1.25-1.646-1.022-.699.078-.685.078-.685 1.13.08 1.725 1.16 1.725 1.16 1.005 1.722 2.637 1.225 3.28.937.102-.728.393-1.225.715-1.507-2.498-.284-5.124-1.25-5.124-5.563 0-1.229.44-2.233 1.16-3.02-.117-.284-.503-1.428.11-2.977 0 0 .945-.303 3.094 1.154a10.79 10.79 0 0 1 5.634 0c2.148-1.457 3.091-1.154 3.091-1.154.615 1.549.229 2.693.113 2.977.722.787 1.158 1.791 1.158 3.02 0 4.324-2.63 5.276-5.136 5.554.404.35.765 1.041.765 2.099 0 1.515-.014 2.737-.014 3.108 0 .301.203.652.774.541A11.252 11.252 0 0 0 12 .75Z"/></svg>
+        <span>支持一下</span>
+        <span id="github-tooltip" class="github-tooltip" role="tooltip">觉得有用的话，欢迎点个 Star ⭐</span>
+      </a>
+    </div>
     <h1>把一个公开 BV 视频变成报告</h1>
     <section class="card" aria-labelledby="url-label">
       <div class="settings-toolbar">

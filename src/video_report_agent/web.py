@@ -137,7 +137,7 @@ def create_server(
                 analytics.record("visit", self.owner)
                 page = PAGE.read_text().replace('data-mode="local"', f'data-mode="{mode}"')
                 if mode == "public":
-                    page = page.replace("LOCAL MVP", "PUBLIC QUEUE").replace(
+                    page = page.replace("Video Visual Report", "Video Visual Report · Public Queue").replace(
                         "本地会依次", "服务端会依次"
                     )
                 return self.send(200, page.encode(), "text/html; charset=utf-8")
