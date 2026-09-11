@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "scope": "report-only; source transcript fidelity, not ASR accuracy or external truth",
+  "cases": [
+    {
+      "id": "numbers",
+      "material": "materials/numbers",
+      "source_run": "cc7c1f56b7fc4e1a8fed530ef3738476",
+      "selection_reason": "短篇并列概念与ASR数字歧义",
+      "review_checks": [
+        {
+          "source_ids": [
+            "unit-000003",
+            "unit-000004"
+          ],
+          "criterion": "ten-four 表示信息收到。"
+        },
+        {
+          "source_ids": [
+            "unit-000005",
+            "unit-000006",
+            "unit-000007"
+          ],
+          "criterion": "86 的餐饮用法与取消的引申义。"
+        },
+        {
+          "source_ids": [
+            "unit-000013",
+            "unit-000014"
+          ],
+          "criterion": "平摊与各付各的区别。"
+        },
+        {
+          "source_ids": [
+            "unit-000010",
+            "unit-000011",
+            "unit-000015"
+          ],
+          "criterion": "转写存在数字和英文识别歧义，不将猜测包装成核实原话。"
+        }
+      ]
+    },
+    {
+      "id": "isaac",
+      "material": "materials/isaac",
+      "source_run": "279366fd1feb4c588c89a476f0607f52",
+      "selection_reason": "条件步骤、资源循环与专名噪声",
+      "review_checks": [
+        {
+          "source_ids": [
+            "unit-000003",
+            "unit-000007"
+          ],
+          "criterion": "充能和资源转换是核心。"
+        },
+        {
+          "source_ids": [
+            "unit-000004",
+            "unit-000006",
+            "unit-000010"
+          ],
+          "criterion": "开刷有充能和关键组件前提，不能变成无条件保证。"
+        },
+        {
+          "source_ids": [
+            "unit-000020"
+          ],
+          "criterion": "开局插头是教学演示条件。"
+        },
+        {
+          "source_ids": [
+            "unit-000077",
+            "unit-000078",
+            "unit-000079"
+          ],
+          "criterion": "保留血量、掉落物、补给、道具之间的循环逻辑。"
+        }
+      ]
+    },
+    {
+      "id": "learning",
+      "material": "materials/learning",
+      "source_run": "c6867082fc8142fd8098e690553fcb67",
+      "selection_reason": "长论述、步骤演示、说话人归属",
+      "review_checks": [
+        {
+          "source_ids": [
+            "unit-000012",
+            "unit-000025"
+          ],
+          "criterion": "单一学习界面聚合多个来源，不等于只接触一种观点。"
+        },
+        {
+          "source_ids": [
+            "unit-000034",
+            "unit-000036"
+          ],
+          "criterion": "减少后勤负担，保留对学习材料本身的努力。"
+        },
+        {
+          "source_ids": [
+            "unit-000039",
+            "unit-000043",
+            "unit-000044"
+          ],
+          "criterion": "探查、规划、教学的关系。"
+        },
+        {
+          "source_ids": [
+            "unit-000046",
+            "unit-000050"
+          ],
+          "criterion": "测试反馈用于校准理解和练习巩固。"
+        },
+        {
+          "source_ids": [
+            "unit-000106",
+            "unit-000116",
+            "unit-000117"
+          ],
+          "criterion": "保留演示中的局限，作者个人体验不转嫁为报告作者的实测。"
+        }
+      ]
+    }
+  ]
+}

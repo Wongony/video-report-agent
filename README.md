@@ -32,6 +32,10 @@ For Windows via Docker Linux, Paraformer and Cloudflare Tunnel, see [deployment 
 
 Reports also produce `report.png`: a full-page desktop screenshot at 920 px wide, keeping the 860 px report paper and a small amount of canvas around it. This uses local Chromium, with no extra model calls. The main page and history offer an image link; older reports generate the image on first access.
 
+Optional in-agent inspection: set `REPORT_REVIEW=1` before starting the service. Pi can check
+layout and source IDs, then make one focused revision (at most two inspections). This is not a
+semantic quality guarantee. See [scope and the three-case report-only A/B evaluation](docs/report-review-v1.md).
+
 ### Install and configure
 
 ```sh
@@ -44,7 +48,7 @@ Set the provider, model, and credential in `.env`:
 
 ```dotenv
 PI_PROVIDER=deepseek
-PI_MODEL=deepseek-v4-flash-vision-exp
+PI_MODEL=deepseek-flash
 PI_API_KEY=your-api-key
 ```
 

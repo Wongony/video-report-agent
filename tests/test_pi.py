@@ -39,6 +39,14 @@ def test_default_thinking_is_low():
     assert PiRunner(thinking="high").thinking == "high"
 
 
+def test_review_is_opt_in_and_evaluation_can_override(monkeypatch):
+    monkeypatch.delenv("REPORT_REVIEW", raising=False)
+    assert PiRunner().review is False
+    monkeypatch.setenv("REPORT_REVIEW", "1")
+    assert PiRunner().review is True
+    assert PiRunner(review=False).review is False
+
+
 def test_agent_end_is_not_success(tmp_path):
     with pytest.raises(PiError, match="before agent_settled"):
         asyncio.run(PiRunner()._consume(Process([{"type": "agent_end"}]), tmp_path, "task"))
@@ -100,10 +108,11 @@ print(json.dumps({"type":"agent_settled"}),flush=True)
     workspace.mkdir()
     (workspace / "transcript.md").write_text("sample")
     with pytest.raises(PiError, match="without report.html"):
-        asyncio.run(PiRunner().run(workspace))
+        asyncio.run(PiRunner(review=True).run(workspace))
     invocation = json.loads((workspace / "invocation.json").read_text())
     assert Path(invocation["cwd"]) == workspace
-    assert "read,write,edit,bash" in invocation["command"]
+    assert "read,write,edit,bash,inspect_report" in invocation["command"]
+    assert "--extension" in invocation["command"]
     assert 'class="video-description-text"' in invocation["prompt"]
     assert "蓝色或黄色背景" in invocation["prompt"]
 

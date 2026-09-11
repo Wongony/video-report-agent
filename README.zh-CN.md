@@ -44,7 +44,7 @@ cp .env.example .env
 
 ```dotenv
 PI_PROVIDER=deepseek
-PI_MODEL=deepseek-v4-flash-vision-exp
+PI_MODEL=deepseek-flash
 PI_API_KEY=your-api-key
 ```
 
