@@ -397,7 +397,7 @@
       function updateSummary(state = 'pending') {
         const model = modelCatalog.find(m => modelId(m) === modelSelect.value);
         const effort = thinkingSelect.value;
-        summary.textContent = publicMode ? 'DeepSeek V4 Flash Vision Low' : model ? `${model.name} ${effort.charAt(0).toUpperCase() + effort.slice(1)}` : '未选择模型';
+        summary.textContent = publicMode ? 'DeepSeek-v4.1-flash' : model ? `${model.name} ${effort.charAt(0).toUpperCase() + effort.slice(1)}` : '未选择模型';
         const message = { pending: '正在检测连接…', connected: '已连接', failed: '未能连接模型服务' }[state];
         summary.parentElement.title = message;
         summary.parentElement.setAttribute('aria-label', `${summary.textContent}，${message}`);

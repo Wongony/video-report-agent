@@ -256,8 +256,16 @@ OCR remains optional RapidOCR (`--extra enhancement`) and is off by default.
 For Beijing Paraformer, set `ASR_BACKEND=paraformer` and `DASHSCOPE_API_KEY` in `.env`.
 `DASHSCOPE_BASE_URL` defaults to `https://dashscope.aliyuncs.com/api/v1`.
 Do not set `ASR_MODEL` unless overriding: the backend supplies its default model
-(`mlx-community/whisper-large-v3-turbo` or `paraformer-v2`). An incompatible explicit
-model raises a configuration error. CLI values override environment values:
+(`mlx-community/whisper-large-v3-turbo` or `paraformer-v2`). The `paraformer` backend also supports `paraformer-v1`, `fun-asr`,
+`fun-asr-2025-08-25`, `fun-asr-2025-11-07`, `fun-asr-mtl`, and
+`fun-asr-mtl-2025-08-25`. Change only `ASR_MODEL` to switch between these models;
+request parameters are selected automatically. Realtime and Qwen-ASR models use
+other protocols and are not supported by this backend. An incompatible explicit
+model raises a configuration error. Restart the local Web app after changing the environment.
+For Docker, after installing an image containing this support, edit `ASR_MODEL` in
+`.env.docker` and run `docker compose --env-file .env.docker up -d app`.
+If using the default `.env` instead, omit `--env-file .env.docker`.
+Existing runs retain their original model configuration. CLI values override environment values:
 
 ```bash
 uv run video-report generate 'https://www.bilibili.com/video/BV1qC836BEsM/' --asr-backend paraformer

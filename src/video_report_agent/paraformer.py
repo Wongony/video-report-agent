@@ -9,7 +9,7 @@ import httpx
 
 from .asr import AsrError, AsrRun, normalize_asr_segments
 from .audio import probe_audio
-from .media_config import DEFAULT_BASE_URL, PARAFORMER_PARAMETERS
+from .media_config import DEFAULT_BASE_URL, cloud_asr_parameters
 from .redaction import redact
 
 
@@ -38,15 +38,14 @@ class ParaformerBackend:
         poll_seconds=5,
         task_path=None,
     ):
-        if model != self.default_model:
-            raise ValueError("paraformer backend requires paraformer-v2")
+        defaults = cloud_asr_parameters(model)
         self.task_path = task_path
         self.model = model
         self.base_url = base_url or DEFAULT_BASE_URL
         self.api_key = os.getenv("DASHSCOPE_API_KEY", "").strip()
         if not self.api_key:
             raise ValueError("DASHSCOPE_API_KEY is required for paraformer")
-        self.parameters = dict(PARAFORMER_PARAMETERS if parameters is None else parameters)
+        self.parameters = dict(defaults if parameters is None else parameters)
         self.client = client
         self.wait_seconds = wait_seconds
         self.poll_seconds = poll_seconds

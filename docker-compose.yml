@@ -11,8 +11,8 @@ services:
     ports:
       - "127.0.0.1:${WEB_PORT:-8765}:8765"
     environment:
-      ASR_BACKEND: paraformer
-      ASR_MODEL: paraformer-v2
+      ASR_BACKEND: ${ASR_BACKEND:-paraformer}
+      ASR_MODEL: ${ASR_MODEL:-paraformer-v2}
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:?Set DASHSCOPE_API_KEY}
       DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL:-https://dashscope.aliyuncs.com/api/v1}
       PI_PROVIDER: ${PI_PROVIDER:-deepseek}

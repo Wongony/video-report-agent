@@ -64,7 +64,7 @@ def test_config_snapshot_not_changed_by_environment(env, tmp_path):
     assert "sk-test-secret" not in (run / "input.json").read_text()
 
 
-def service(mode="ok"):
+def service(mode="ok", model="paraformer-v2"):
     calls = []
 
     def handle(request):
@@ -89,8 +89,11 @@ def service(mode="ok"):
             return httpx.Response(200)
         if request.url.path.endswith("/transcription"):
             payload = json.loads(request.content)
-            assert payload["model"] == "paraformer-v2"
-            assert payload["parameters"]["timestamp_alignment_enabled"] is True
+            assert payload["model"] == model
+            if model.startswith("fun-asr"):
+                assert payload["parameters"] == {"channel_id": [0], "language_hints": ["zh"]}
+            else:
+                assert payload["parameters"]["timestamp_alignment_enabled"] is True
             assert request.headers["X-DashScope-OssResourceResolve"] == "enable"
             if mode == "submit_timeout":
                 raise httpx.ReadTimeout("secret URL https://host/?signature=secret")
@@ -200,3 +203,39 @@ def test_diagnostic_redaction():
     assert clean["nested"] == [{"text": "保留正文"}]
     assert "secret" not in json.dumps(clean)
     assert clean["task_id"] == "task-1"
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "paraformer-v1",
+        "paraformer-v2",
+        "fun-asr",
+        "fun-asr-2025-08-25",
+        "fun-asr-2025-11-07",
+        "fun-asr-mtl",
+        "fun-asr-mtl-2025-08-25",
+    ],
+)
+def test_environment_model_switch_preserves_transcript_contract(audio, env, model):
+    env.setenv("ASR_BACKEND", "paraformer")
+    env.setenv("ASR_MODEL", model)
+    config = resolve_media_config()
+    client, calls = service(model=model)
+    backend = ParaformerBackend(model=config["asr_model"], client=client, poll_seconds=0)
+    assert backend.parameters == config["asr_parameters"]
+    result = backend.transcribe(audio)
+    assert result.model == model
+    assert (result.segments[0].start_ms, result.segments[0].end_ms) == (100, 900)
+    upload = next(r for r in calls if r.url.path.endswith("/uploads"))
+    assert upload.url.params["model"] == model
+
+
+@pytest.mark.parametrize("model", ["gummy-realtime-v1", "qwen3-asr-flash", "unknown"])
+def test_incompatible_models_fail_before_upload(env, model):
+    env.setenv("ASR_BACKEND", "paraformer")
+    env.setenv("ASR_MODEL", model)
+    with pytest.raises(ValueError, match="Unsupported file ASR model"):
+        resolve_media_config()
+    with pytest.raises(ValueError, match="Unsupported file ASR model"):
+        ParaformerBackend(model=model)
