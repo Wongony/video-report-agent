@@ -22,3 +22,6 @@ Archify/
 # Pi project credentials and runtime state
 config/pi/*
 !config/pi/models.json
+
+# WorkBuddy agent workspace (local tool state: memory logs, tmp scratch files)
+.workbuddy/

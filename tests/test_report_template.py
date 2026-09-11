@@ -25,3 +25,17 @@ def test_footer_keeps_report_label_left_and_domain_right():
         "<footer><span>精读 · 本地阅读报告</span>"
         "<span>vreport.tri4t.xyz</span></footer>"
     ) in template
+
+
+def test_bar_component_pins_block_display_on_fill():
+    """柱图组件必须自带 display:block。
+
+    历史故障：模型自写 `.bar-fill{height:100%}` 挂在 <span> 上，行内元素的
+    width/height 不生效，getBoundingClientRect() 返回 0×0，整条柱子渲染成空白。
+    """
+    template = TEMPLATE.read_text()
+
+    assert ".bars{" in template
+    assert ".bar-track{" in template
+    assert ".bar-fill{display:block;height:100%;" in template
+    assert ".bar-value{" in template
