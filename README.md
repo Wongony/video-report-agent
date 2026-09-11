@@ -56,6 +56,22 @@ the page layout; otherwise, state that only static checks were performed.
 
 Open `output/report.html` in a browser. The Skill guides content organization, source fidelity, and layout. Results depend on transcript quality, the Agent's model, and available tools. The Skill does not include an ASR engine or configure your transcription service.
 
+## Preview
+
+**Web homepage · default state**
+
+![Web homepage in its default state](docs/images/web-home.png)
+
+**Sample report · China's fiscal rebalancing (in Chinese)**
+
+The image below shows the top of the report. Follow the links for the complete report without expanding the entire long image in this README.
+
+[![HTML reading report preview](docs/images/report-preview.png)](docs/examples/report.png)
+
+↗ 🔗 [HTML report](docs/examples/report.html) · [Full PNG](docs/examples/report.png)
+
+On GitHub, the HTML link opens the file page; download it and open it in a browser to read. The example files are included in the repository and do not require a running local service.
+
 ## Optional: run the complete local project
 
 Run the local Web UI if you want to paste a Bilibili URL and automate downloading, transcription, report generation, and report history.

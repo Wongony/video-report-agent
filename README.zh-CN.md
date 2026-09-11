@@ -56,6 +56,22 @@ my-report/
 
 用浏览器打开 `output/report.html` 即可阅读。Skill 提供内容组织、来源准确性与版式约束；实际效果取决于转写质量、Agent 的模型与可用工具。Skill 本身不包含 ASR 引擎，也不会自动配置你的转写服务。
 
+## 效果展示
+
+**Web 主页 · 默认状态**
+
+![Web 前端主页默认状态](docs/images/web-home.png)
+
+**报告示例 ·《削藩与分配：中国财政再平衡的逻辑与路径》**
+
+下图展示报告顶部，完整长图通过链接查看，避免在 README 中展开整篇。
+
+[![HTML 精读报告顶部预览](docs/images/report-preview.png)](docs/examples/report.png)
+
+↗ 🔗 [HTML 报告](docs/examples/report.html) · [PNG 完整长图](docs/examples/report.png)
+
+在 GitHub 中，HTML 链接打开文件页面；下载后用浏览器打开即可阅读。示例文件随仓库提供，无需启动本地服务。
+
 ## 可选：运行完整的本地项目
 
 如果需要粘贴 Bilibili 链接后自动下载、转写、生成报告并查看历史，可以运行本仓库的本地 Web UI。
