@@ -34,7 +34,7 @@ def test_share_preserves_page():
     "https://127.0.0.1/video/BV1bFbK6BEut",
     "http://www.bilibili.com/video/BV1bFbK6BEut",
     "https://www.bilibili.com:443/video/BV1bFbK6BEut",
-    "https://b23.tv/example",
+    "https://b23.tv/example/extra",
     URL + "/extra",
     URL + "#fragment",
     URL + "?p=0",
@@ -138,3 +138,37 @@ def test_duration_limit(tmp_path, duration, allowed):
     else:
         with pytest.raises(UrlIngestError):
             _metadata(path, validate_bilibili_url(URL))
+
+
+@pytest.mark.parametrize("title", [
+    "【一旦有钱立刻升级这7样东西！——Dan Martell【中英字幕】】",
+    "【电诈，进化到这种程度了？【大国之治·反诈系统】-哔哩哔哩】",
+])
+def test_nested_share_title(title):
+    url = "https://www.bilibili.com/video/BV1AzYs6bEeX/"
+    source = validate_bilibili_url(title + f" [{url}]({url}?share_source=copy_web)")
+    assert source.canonical_url == url
+
+
+@pytest.mark.parametrize("destination", [
+    URL + "?p=2", "https://127.0.0.1/", "https://evil.example/", "https://b23.tv/other",
+])
+def test_short_share_validates_redirect(tmp_path, monkeypatch, destination):
+    import httpx
+
+    calls = []
+
+    def get(url, **kwargs):
+        calls.append((url, kwargs))
+        return httpx.Response(302, headers={"location": destination})
+
+    monkeypatch.setattr("video_report_agent.ingest.httpx.get", get)
+    value = "【电诈，进化到这种程度了？【大国之治·反诈系统】-哔哩哔哩】 [https://b23.tv/Rfx6XG4](https://b23.tv/Rfx6XG4)"
+    if destination.startswith(URL):
+        run = create_run(tmp_path, value)
+        assert json.loads((run / "input.json").read_text())["url"] == URL + "/?p=2"
+    else:
+        with pytest.raises(UrlIngestError):
+            create_run(tmp_path, value)
+        assert not list(tmp_path.iterdir())
+    assert calls == [("https://b23.tv/Rfx6XG4", {"follow_redirects": False, "timeout": 10})]

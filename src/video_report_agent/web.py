@@ -267,10 +267,12 @@ def create_server(
                     ):
                         raise ValueError("Subtitle must be SRT, VTT or ASS text")
 
+                source = validate_bilibili_url(data["url"])
+
                 def create():
                     run = create_run(
                         root,
-                        data["url"],
+                        source.canonical_url,
                         transcript_mode=data.get("transcript_mode", "asr-only"),
                         ocr_mode=data.get("ocr_mode", "off"),
                         ocr_roi=data.get("ocr_roi"),
@@ -285,7 +287,7 @@ def create_server(
                     return run
 
                 run = queue.submit(
-                    self.owner, create, video_id=validate_bilibili_url(data["url"]).video_id
+                    self.owner, create, video_id=source.video_id
                 )
             except AdmissionError as exc:
                 messages = {

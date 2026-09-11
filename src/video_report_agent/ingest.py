@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qsl, urlsplit
 
+import httpx
+
 BILIBILI_HOSTS = frozenset({"bilibili.com", "www.bilibili.com"})
 _BVID_PATTERN = re.compile(r"BV[0-9A-Za-z]{10}")
 _PAGE_PATTERN = re.compile(r"[0-9]+")
@@ -63,12 +65,26 @@ def _parse_bilibili_url(value: object) -> tuple[str, str, int, str]:
         raise UrlIngestError("URL_INVALID", "url must be a string")
     submitted_url = value.strip()
     # Bilibili's copied share text prefixes the link with a bracketed title.
-    link = re.sub(r"^【[^】]*】\s*", "", submitted_url, count=1).strip()
+    link = re.sub(r"^【.*】\s*", "", submitted_url, count=1, flags=re.DOTALL).strip()
     markdown_link = re.fullmatch(r"\[[^\]\r\n]*\]\(((?:https://|www\.)[^\s()]+)\)", link)
     if markdown_link:
         link = markdown_link.group(1)
     if link.startswith("www."):
         link = "https://" + link
+    if link.startswith("https://b23.tv/"):
+        short = urlsplit(link)
+        if not re.fullmatch(r"/[A-Za-z0-9]+/?", short.path) or short.fragment:
+            raise UrlIngestError("URL_INVALID", "无效的 Bilibili 短链接")
+        try:
+            response = httpx.get(link, follow_redirects=False, timeout=10)
+        except httpx.HTTPError as exc:
+            raise UrlIngestError(
+                "URL_RESOLVE_FAILED", "Bilibili 短链接解析失败，请稍后重试或粘贴完整视频链接"
+            ) from exc
+        if response.status_code not in {301, 302, 303, 307, 308}:
+            raise UrlIngestError("URL_RESOLVE_FAILED", "Bilibili 短链接未返回视频地址")
+        # Validate the redirect below before any request to its destination.
+        link = response.headers.get("location", "")
     normalized_url = (
         f"https://www.bilibili.com/video/{link}/"
         if _BVID_PATTERN.fullmatch(link)
@@ -113,7 +129,7 @@ def clean_bilibili_url(value: object) -> str:
 
 
 def validate_bilibili_url(value: object) -> BilibiliSource:
-    """Validate and clean one public Bilibili BV URL without side effects."""
+    """Validate a public BV URL, resolving b23.tv share links when necessary."""
 
     submitted_url, bvid, page_number, canonical_url = _parse_bilibili_url(value)
     return BilibiliSource(
