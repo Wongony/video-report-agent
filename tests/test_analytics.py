@@ -87,6 +87,13 @@ def test_admin_auth_visits_polling_and_rejected_submissions(tmp_path, monkeypatc
     base = f"http://127.0.0.1:{server.server_port}"
     client = build_opener(HTTPCookieProcessor(CookieJar()))
     try:
+        ledger_before = (tmp_path / ".usage.jsonl").read_text()
+        for _ in range(3):
+            with urlopen(base + "/healthz") as response:
+                assert response.status == 200
+                assert response.headers.get("Set-Cookie") is None
+                assert json.load(response) == {"status": "ok"}
+        assert (tmp_path / ".usage.jsonl").read_text() == ledger_before
         for path in ("/", "/", "/api/visual-report/runs", "/api/visual-report/current"):
             with client.open(base + path) as response:
                 response.read()

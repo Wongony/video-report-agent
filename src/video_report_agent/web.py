@@ -128,8 +128,11 @@ def create_server(
             self.wfile.write(body)
 
         def do_GET(self):
-            self.identify()
             path = unquote(urlsplit(self.path).path)
+            if path == "/healthz":
+                self.owner_cookie = None
+                return self.send(200, {"status": "ok"})
+            self.identify()
             if path == "/":
                 analytics.record("visit", self.owner)
                 page = PAGE.read_text().replace('data-mode="local"', f'data-mode="{mode}"')
