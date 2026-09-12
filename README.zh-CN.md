@@ -1,5 +1,7 @@
 # Video Report Agent
 
+线上网站 👉 [vreport.tri4t.xyz](https://vreport.tri4t.xyz)
+
 [English](README.md) | 简体中文
 
 把视频转写整理成自包含的 HTML 精读报告。**只需 ASR + video-report Skill，就可以在自己的 Coding Agent 中生成报告，无需部署整个项目。**
