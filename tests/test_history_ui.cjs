@@ -56,6 +56,16 @@ test('Local history only requests own runs', async () => {
   assert.match(historyList.innerHTML, /还没有提交任务/);
 });
 
+test('Video title opens the original video and preserves the selected part', async () => {
+  const report = { ...shared, title: '视频标题', video_url: 'https://www.bilibili.com/video/BV1aTtb6uE7d/?p=2' };
+  const { historyList } = await history(false, [report], []);
+  const title = historyList.children[0].children[0].children[0];
+  assert.equal(title.textContent, report.title);
+  assert.equal(title.href, report.video_url);
+  assert.equal(title.target, '_blank');
+  assert.equal(title.rel, 'noopener noreferrer');
+});
+
 test('A failed history request displays the error state', async () => {
   const { historyList } = await history(true, [], [], '/api/visual-report/reports');
   assert.match(historyList.innerHTML, /历史报告暂时无法读取/);

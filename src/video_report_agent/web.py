@@ -101,6 +101,14 @@ def create_server(
                     except (OSError, ValueError):
                         continue
             for item in statuses:
+                try:
+                    metadata = json.loads((root / item["run_id"] / "input.json").read_text())
+                except (OSError, ValueError):
+                    metadata = {}
+                if not item.get("title"):
+                    item["title"] = metadata.get("title")
+                if metadata.get("url"):
+                    item["video_url"] = validate_bilibili_url(metadata["url"]).canonical_url
                 if item.get("state") == "RENDERED" and item.get("report_url"):
                     item["image_url"] = f"/reports/{item['run_id']}/report.png"
                 item.pop("download_reused_from", None)

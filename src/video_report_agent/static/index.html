@@ -184,6 +184,8 @@
       padding: 14px; border: 1px solid var(--line); border-radius: 13px; background: #fbfcff;
     }
     .history-title { margin: 0; color: var(--ink); font-size: 14px; font-weight: 750; }
+    a.history-title { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+    a.history-title:hover { text-decoration-thickness: 2px; }
     .history-meta { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
     .history-link {
       color: #315dcd; font-size: 13px; font-weight: 750; text-decoration: none;
@@ -694,9 +696,15 @@
             const item = document.createElement('article');
             item.className = 'history-item';
             const copy = document.createElement('div');
-            const title = document.createElement('p');
+            const title = document.createElement(report.video_url ? 'a' : 'p');
             title.className = 'history-title';
             title.textContent = report.title || report.video_id || report.run_id;
+            if (report.video_url) {
+              title.href = report.video_url;
+              title.target = '_blank';
+              title.rel = 'noopener noreferrer';
+              title.title = '在新标签页打开原视频';
+            }
             const meta = document.createElement('p');
             meta.className = 'history-meta';
             meta.textContent = `${report.video_id || ''} · ${labels[report.stage] || report.state}`;

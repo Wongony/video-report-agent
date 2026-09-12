@@ -120,10 +120,11 @@ def generate(run: Path) -> dict:
             attribution=downloaded.attribution,
         )
         write_json(run / "input.json", metadata)
+        status["title"] = downloaded.title
         transcript_source = reuse_transcript(run, metadata)
         status["transcript_reused_from"] = transcript_source
         if transcript_source is None:
-            update("TRANSCRIBING", title=downloaded.title)
+            update("TRANSCRIBING")
             audio = extract_audio(downloaded.media_path, run / "audio.wav")
             asr = transcribe_audio(
                 audio.path,

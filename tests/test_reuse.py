@@ -71,6 +71,8 @@ def test_pipeline_reuses_inputs_and_generates_new_report(completed, monkeypatch)
     monkeypatch.setattr(pipeline, "PiRunner", lambda: SimpleNamespace(run=generate_report))
     status = pipeline.generate(run)
     assert status["state"] == "RENDERED"
+    assert status["title"] == "Test"
+    assert json.loads((run / "status.json").read_text())["title"] == "Test"
     assert status["download_reused_from"] == previous.name
     assert status["transcript_reused_from"] == previous.name
     assert (run / "download/source.mp4").stat().st_ino == (

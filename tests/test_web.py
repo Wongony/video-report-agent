@@ -11,6 +11,9 @@ from video_report_agent.web import create_server
 
 def test_local_ui_status_report_and_file_boundary(tmp_path):
     run = create_run(tmp_path, "https://www.bilibili.com/video/BV1aTtb6uE7d/")
+    metadata = json.loads((run / "input.json").read_text())
+    metadata.update(title="重复生成的视频标题", url=metadata["url"] + "?p=2")
+    write_json(run / "input.json", metadata)
     (run / "report.html").write_text("<html><body>report</body></html>")
     (run / "private.txt").write_text("private")
     (run / "assets").mkdir()
@@ -33,6 +36,8 @@ def test_local_ui_status_report_and_file_boundary(tmp_path):
         with urlopen(base + f"/api/visual-report/runs/{run.name}") as response:
             status = json.load(response)
             assert status["state"] == "RENDERED"
+            assert status["title"] == "重复生成的视频标题"
+            assert status["video_url"] == "https://www.bilibili.com/video/BV1aTtb6uE7d/?p=2"
             assert status["image_url"] == f"/reports/{run.name}/report.png"
         with urlopen(base) as response:
             page = response.read().decode()
