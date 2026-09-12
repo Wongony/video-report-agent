@@ -24,7 +24,7 @@ ASR converts speech to text. Your Coding Agent's model reads that text and creat
 
 ### 2. Get the Skill and template
 
-Download the repository, or copy just the complete [`src/video_report_agent/skills/video-report/`](src/video_report_agent/skills/video-report/) directory. Keep `SKILL.md` and `assets/` together with their relative paths intact.
+Download the repository, or copy just the complete [`src/video_report_agent/skills/video-report/`](src/video_report_agent/skills/video-report/) directory. Keep `SKILL.md`, `assets/`, and `references/` together with their relative paths intact.
 
 Arrange your working folder as follows:
 
@@ -33,12 +33,15 @@ my-report/
 ├── transcript.md
 ├── video-report/
 │   ├── SKILL.md
+│   ├── references/           # Editing guidance selected by the Skill
 │   └── assets/
 │       └── report-template.html
 └── output/
 ```
 
 You do not need this project's Python backend, Pi RPC, or Web UI. Use a Coding Agent that can read local files and write HTML, with its own model configured. If it supports Skills, install the directory using its conventions; otherwise, explicitly ask it to read the instructions from the file.
+
+A transcript is enough: `input.json` and `source.info.json` are not required. A supplied video description is optional; without one, the Skill omits that section. Standalone output is complete HTML with no pending description placeholder or Python postprocessing step. Browser inspection and PNG export are optional and depend on your Agent's available tools.
 
 ### 3. Ask your Agent to generate the report
 

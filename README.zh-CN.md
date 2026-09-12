@@ -24,7 +24,7 @@ ASR 负责把语音转成文字，Coding Agent 中的模型负责阅读、整理
 
 ### 2. 获取 Skill 和模板
 
-下载仓库，或只取出 [`src/video_report_agent/skills/video-report/`](src/video_report_agent/skills/video-report/) 整个目录。保留 `SKILL.md` 与 `assets/` 的相对位置，不能只复制提示词而漏掉模板。
+下载仓库，或只取出 [`src/video_report_agent/skills/video-report/`](src/video_report_agent/skills/video-report/) 整个目录。保留 `SKILL.md`、`assets/` 与 `references/` 的相对位置，不能只复制提示词而漏掉模板和编辑规则。
 
 在自己的工作目录中放置：
 
@@ -33,12 +33,15 @@ my-report/
 ├── transcript.md
 ├── video-report/
 │   ├── SKILL.md
+│   ├── references/           # Skill 按需读取的编辑规则
 │   └── assets/
 │       └── report-template.html
 └── output/
 ```
 
 无需安装本项目的 Python 后端、Pi RPC 或 Web UI。使用能够读取本地文件、写入 HTML 的 Coding Agent，并配置好它自己的模型即可。支持 Skill 的 Agent 可以按其约定安装该目录；也可以直接要求 Agent 读取文件中的说明。
+
+只有转写文本也可以使用，不要求 `input.json` 或 `source.info.json`。视频简介为可选内容，没有则省略；独立生成的 HTML 不保留待填充的简介占位符，也不需要 Python 后处理。浏览器检查和 PNG 导出是可选能力，取决于你的 Agent 是否具备对应工具。
 
 ### 3. 把任务交给 Agent
 
