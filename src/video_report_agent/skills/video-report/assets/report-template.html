@@ -31,6 +31,15 @@ footer{display:flex;align-items:baseline;justify-content:space-between;gap:16px;
 </header>
 <!-- 有视频简介时，将此占位符替换为裸 details/summary；它必须与页尾来源说明共用同一套样式，不添加背景、边框、圆角或强调框。 -->
 {{VIDEO_DESCRIPTION}}
+<!-- 分层阅读按内容复杂度选用：BODY 内先放“快速掌握”的紧凑要点，再用“内容地图”表达主线关系并以 href="#章节id" 导向详细 section；深入阅读正常展开。可合并层次，不增加必填模块或重复全文摘要。Profile 不进入可见页面。 -->
+<!-- 共用视觉语法，所有 Profile 均可使用；以下为可选结构指引，不是待填的固定章节：
+Timeline / Turning Points：ol > li 按事件排列，每项写事件或阶段、变化与后果；转折可用 strong 标识。事件日期属于内容，不重复视频定位时间戳。
+Before → Trigger → After：使用 comparison 对照同一对象前后状态，以邻近短段或过程链说明触发事件；不能用布局暗示来源未支持的因果。
+Issue Matrix：table 的行对应议题，列按实际人物及立场、依据组织，必要时增加共识或未解决问题；th 标明列义，未表态如实标注。
+Evidence Chain：ol 或 ol.steps 连接问题、方法、证据、结果和限制，适用条件靠近对应节点；材料缺失时不强填节点。
+Decision Tree：嵌套 ul/li 在分支开头写明条件，再写动作与结果；复杂关系可用内联 SVG，连接处标明条件。普通线性步骤继续使用 ol。
+State / Relationship Map：使用 HTML/CSS 或内联 SVG 呈现带名称的对象和状态，连接标注作用及方向，必要条件紧邻关系；推测或类比明确标识。关系链用明确的网格或 SVG 定位，横向放不下时采用纵向或明确连接的分行结构，不让箭头与节点随 flex-wrap 自由折行；回路画出返回目标和方向，不只在图下用文字说明。
+这些结构直接承担内容；复用现有样式，不依赖外部脚本或图库，不要求每份报告使用全部语法。 -->
 <!-- 正文从语义组织生成：section/h2（span.num 放连续章节序号，后接 span 标题文本）、h3/p；可选 callout、keyline、cards/card、comparison、categories/category、ol.steps/li、stats、tiles/tile、bars/bar。不存在必填章节或必用组件。柱图按 div.bars > div.bar 组织，每个 bar 为 div.bar-head（span.bar-name + span.bar-value）加 span.bar-track>span.bar-fill；bar-fill 的 width 即占比，bar-track 占满整行宽度，同组共用刻度（最大项给 width:100%）。短项目用原生列表、表格或紧凑分栏，名称与数值同行；ol.steps 仅供需要展开解释的步骤选用，圆圈编号与布局可自行调整。p、li 或卡片用 data-source-units 绑定实际支持内容的 ID。 -->
 {{BODY}}
 <details><summary>来源与处理说明</summary>{{SOURCES}}</details>
