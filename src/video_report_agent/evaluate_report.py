@@ -46,8 +46,8 @@ def evaluate(manifest: Path, output: Path, *, timeout: float = 600, repeats: int
     shutil.copytree(SKILL, output / "skill-snapshot")
     runtime = output / "runtime-snapshot"
     runtime.mkdir()
-    for name in ("pi.py", "report_image.py", "inspect_report.py", "report_inspect.ts",
-                 "evaluate_report.py"):
+    for name in ("pi.py", "report_content.py", "report_image.py", "inspect_report.py",
+                 "report_inspect.ts", "evaluate_report.py"):
         shutil.copy2(Path(__file__).with_name(name), runtime / name)
     rows = []
     for repeat in range(repeats):

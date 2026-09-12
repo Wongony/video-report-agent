@@ -7,7 +7,7 @@ import shutil
 import time
 from pathlib import Path
 
-from .pi import _normalize_video_description
+from .report_content import fill_video_description
 from .report_image import render_report_image
 
 PAGE_CHECK = r"""() => {
@@ -54,11 +54,12 @@ def inspect_report(run: Path, label: str = "final") -> dict:
     shutil.copy2(report, target / "source.html")
     shutil.copy2(report, target / "report.html")
     # Preview the same postprocessing as delivery without changing the agent's working file.
-    _normalize_video_description(target / "report.html")
+    # Metadata is deliberately read from the original run, while source.html stays raw.
+    fill_video_description(target / "report.html", run)
     source_ids = set(re.findall(r"^\[([^ |]+) \|", (run / "transcript.md").read_text(), re.M))
     result = {"status": "error", "inspector_version": "1.1",
               "scope": "layout_and_reference_integrity_only",
-              "preview": "delivery-normalized copy; working report.html is unchanged",
+              "preview": "delivery-filled copy; working report.html is unchanged",
               "semantic_review": "not_performed", "visual_quality": "not_scored",
               "source_id_count": len(source_ids), "screenshots": []}
 

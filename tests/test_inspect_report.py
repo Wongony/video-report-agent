@@ -42,13 +42,27 @@ def test_browser_failure_is_not_a_pass(tmp_path, monkeypatch):
     assert json.loads((tmp_path / "inspection/final/result.json").read_text())["status"] == "error"
 
 
-def test_inspection_only_normalizes_preview_not_agent_file(tmp_path):
-    original = ('<html><body><details><summary>视频简介（展开）</summary>'
-                '<div>简介</div></details><p data-source-units="unit-1">正文</p></body></html>')
+def test_inspection_only_fills_preview_not_agent_file(tmp_path):
+    original = ('<html><body>{{VIDEO_DESCRIPTION}}'
+                '<p data-source-units="unit-1">正文</p></body></html>')
     (tmp_path / "report.html").write_text(original)
     (tmp_path / "transcript.md").write_text("[unit-1 | 0–1s] 正文")
+    (tmp_path / "download").mkdir()
+    (tmp_path / "download/source.info.json").write_text('{"description":"简介"}')
     result = inspect_report(tmp_path)
     assert result["status"] == "checked"
     assert (tmp_path / "report.html").read_text() == original
     assert (tmp_path / "inspection/final/source.html").read_text() == original
-    assert "data-video-description" in (tmp_path / "inspection/final/report.html").read_text()
+    preview = (tmp_path / "inspection/final/report.html").read_text()
+    assert "{{VIDEO_DESCRIPTION}}" not in preview
+    assert "<details><summary>视频简介（展开）</summary>" in preview
+    assert "data-video-description" not in preview
+
+    # A completed review can leave the filled report in place; the final inspect
+    # must fill the existing boundary again without duplicating the disclosure.
+    (tmp_path / "report.html").write_text(preview)
+    final = inspect_report(tmp_path, "after-review")
+    assert final["status"] == "checked"
+    final_preview = (tmp_path / "inspection/after-review/report.html").read_text()
+    assert final_preview == preview
+    assert final_preview.count("视频简介（展开）") == 1

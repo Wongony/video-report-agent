@@ -52,3 +52,4 @@ def test_report_only_ab_preserves_failures_and_does_not_retry(tmp_path, monkeypa
     assert rows[1]["review_compliance"] == "missing_or_failed_or_stale_inspection"
     assert json.loads((output / "results.json").read_text()) == rows
     assert (output / "skill-snapshot/SKILL.md").is_file()
+    assert (output / "runtime-snapshot/report_content.py").is_file()

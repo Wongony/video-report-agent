@@ -10,7 +10,6 @@ from video_report_agent.pi import (
     PI_AGENT_DIR,
     PiError,
     PiRunner,
-    _normalize_video_description,
 )
 
 
@@ -113,28 +112,9 @@ print(json.dumps({"type":"agent_settled"}),flush=True)
     assert Path(invocation["cwd"]) == workspace
     assert "read,write,edit,bash,inspect_report" in invocation["command"]
     assert "--extension" in invocation["command"]
-    assert 'class="video-description-text"' in invocation["prompt"]
-    assert "蓝色或黄色背景" in invocation["prompt"]
-
-
-def test_video_description_is_normalized_to_source_note_style(tmp_path):
-    report = tmp_path / "report.html"
-    report.write_text(
-        """<html><head><style>
-        .desc details { background: #edf7ff; border: 1px solid #d2e8f8; }
-        </style></head><body><main><header></header>
-        <details class=\"desc\" open><summary class=\"blue\">视频简介（展开）</summary>
-        <div class=\"desc-body\">第一行\n第二行</div></details>
-        </main></body></html>"""
-    )
-
-    _normalize_video_description(report)
-    html = report.read_text()
-
-    assert '<details data-video-description><summary>视频简介（展开）</summary>' in html
-    assert 'class="desc"' not in html
-    assert 'class="blue"' not in html
-    assert "/* fixed video description details */" in html
+    assert "{{VIDEO_DESCRIPTION}}" in invocation["prompt"]
+    assert "不要读取、改写或自行生成视频简介" in invocation["prompt"]
+    assert "蓝色或黄色背景" not in invocation["prompt"]
 
 
 def test_project_provider_model_and_api_key_are_passed_but_redacted(tmp_path, monkeypatch):

@@ -29,7 +29,7 @@ footer{display:flex;align-items:baseline;justify-content:space-between;gap:16px;
 <p class="lead">{{LEAD}}</p>
 <p class="meta">{{ATTRIBUTION}}</p>
 </header>
-<!-- 有视频简介时，将此占位符替换为裸 details/summary；它必须与页尾来源说明共用同一套样式，不添加背景、边框、圆角或强调框。 -->
+<!-- 运行时依据原始 source.info.json 填充；模型必须原样保留此占位符一次，不自行生成视频简介。 -->
 {{VIDEO_DESCRIPTION}}
 <!-- 分层阅读按内容复杂度选用：BODY 内先放“快速掌握”的紧凑要点，再用“内容地图”表达主线关系并以 href="#章节id" 导向详细 section；深入阅读正常展开。可合并层次，不增加必填模块或重复全文摘要。Profile 不进入可见页面。 -->
 <!-- 共用视觉语法，所有 Profile 均可使用；以下为可选结构指引，不是待填的固定章节：
