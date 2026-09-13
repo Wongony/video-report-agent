@@ -108,7 +108,12 @@ def create_server(
                 if not item.get("title"):
                     item["title"] = metadata.get("title")
                 if metadata.get("url"):
-                    item["video_url"] = validate_bilibili_url(metadata["url"]).canonical_url
+                    try:
+                        item["video_url"] = validate_bilibili_url(metadata["url"]).canonical_url
+                    except UrlIngestError:
+                        # Keep legacy non-Bilibili reports (for example Douyin) visible
+                        # without applying the Bilibili-only canonicalization rule.
+                        item["video_url"] = metadata["url"]
                 if item.get("state") == "RENDERED" and item.get("report_url"):
                     item["image_url"] = f"/reports/{item['run_id']}/report.png"
                 item.pop("download_reused_from", None)

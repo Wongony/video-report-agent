@@ -81,6 +81,37 @@ def test_mode_validation_before_workspace_creation(tmp_path):
     assert not list(tmp_path.iterdir())
 
 
+def test_local_history_keeps_legacy_non_bilibili_reports(tmp_path):
+    run = tmp_path / "douyin-legacy"
+    run.mkdir()
+    write_json(run / "input.json", {
+        "url": "https://www.douyin.com/video/1234567890",
+        "video_id": "douyin-1234567890",
+        "title": "抖音历史报告",
+    })
+    write_json(run / "status.json", {
+        "run_id": run.name,
+        "state": "RENDERED",
+        "report_url": f"/reports/{run.name}/report.html",
+    })
+    (run / "report.html").write_text("<html><body>report</body></html>")
+
+    server = create_server(tmp_path, 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    try:
+        with urlopen(base + "/api/visual-report/runs") as response:
+            reports = json.load(response)["runs"]
+        assert reports[0]["video_url"] == "https://www.douyin.com/video/1234567890"
+        with urlopen(base + "/api/visual-report/reports") as response:
+            assert len(json.load(response)["reports"]) == 1
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
 def test_bvid_input_uses_same_video_identity_as_url(tmp_path):
     bvid_run = create_run(tmp_path, "  BV1aTtb6uE7d\n")
     url_run = create_run(tmp_path, "https://www.bilibili.com/video/BV1aTtb6uE7d/")

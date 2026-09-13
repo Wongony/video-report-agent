@@ -55,6 +55,40 @@
           }
         }
       ]
+    },
+    "heyroute": {
+      "baseUrl": "https://heyroute.ai/v1",
+      "api": "openai-responses",
+      "apiKey": "$PI_API_KEY",
+      "models": [
+        {
+          "id": "deepseek-v4.1-flash",
+          "name": "DeepSeek V4.1 Flash · HeyRoute",
+          "reasoning": true,
+          "input": [
+            "text",
+            "image"
+          ]
+        },
+        {
+          "id": "glm-5.3-flash",
+          "name": "GLM-5.3 Flash · HeyRoute",
+          "reasoning": true,
+          "input": [
+            "text",
+            "image"
+          ]
+        },
+        {
+          "id": "deepseek-v4-flash-0731",
+          "name": "DeepSeek V4 Flash 0731 · HeyRoute",
+          "reasoning": true,
+          "input": [
+            "text",
+            "image"
+          ]
+        }
+      ]
     }
   }
 }
