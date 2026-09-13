@@ -7,6 +7,8 @@
 <style>
 :root{color-scheme:light;font-family:"Avenir Next","PingFang SC","Microsoft YaHei",sans-serif;color:#172033;background:#fff;font-variant-numeric:tabular-nums;--muted:#596579;--line:#dce5f2;--blue:#2859ca}
 *{box-sizing:border-box}body{margin:0;padding:40px 24px}main{max-width:1180px;margin:auto}header{display:flex;align-items:center;justify-content:space-between;gap:20px}h1{font-size:30px;letter-spacing:-.02em;margin:0}h2{font-size:20px;margin:32px 0 16px}p{line-height:1.7;color:var(--muted);max-width:75ch}a{color:var(--blue);text-underline-offset:4px}form,.controls{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin:24px 0}label{display:block;font-size:14px;margin-bottom:6px}input,button{font:inherit;min-height:44px;border-radius:8px;border:1px solid #bcc9dd;padding:9px 12px;background:white;color:inherit}input{max-width:100%}button{cursor:pointer;color:var(--blue);font-weight:600}button:hover{background:#eef4ff}button:disabled{opacity:.6;cursor:wait}:focus-visible{outline:3px solid var(--blue);outline-offset:3px}::selection{background:#dbe7ff}#key{width:300px}#message{min-height:24px;color:#a32739}dl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0 24px;margin:0}dl>div{padding:18px 0;border-top:1px solid var(--line)}dt{font-size:14px;color:var(--muted)}dd{margin:8px 0 0;font-size:27px;font-weight:600}.note{font-size:13px}#fees{display:flex;gap:48px;flex-wrap:wrap;border-block:1px solid var(--line);padding:20px 0}#fees p{margin:0}#fees strong{display:block;color:#172033;font-size:25px;margin-top:6px}.table-scroll{overflow:auto;scrollbar-color:#bcc9dd #fff}table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}th,td{padding:13px 12px;text-align:left;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:600}td small{display:block;color:var(--muted);margin-top:4px}caption{text-align:left;padding-bottom:12px;color:var(--muted)}[hidden]{display:none!important}#logout{margin-left:auto}@media(max-width:650px){body{padding:24px 16px}header{align-items:start}h1{font-size:26px}dl{grid-template-columns:repeat(2,minmax(0,1fr))}#fees{gap:24px}.controls>div{flex:1}input[type=date]{width:100%}}
+
+select{font:inherit;padding:9px 12px;min-height:44px;border:1px solid #bcc9dd;border-radius:8px;background:white;color:inherit}.trend-head{display:flex;gap:16px;align-items:center;flex-wrap:wrap}.trend-head h2{margin-right:auto}.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px}.legend span:before{content:"";display:inline-block;width:10px;height:10px;background:var(--series);margin-right:6px}.chart{display:flex;gap:8px;align-items:stretch;min-height:240px;padding:24px 4px 8px;overflow-x:auto;border-bottom:1px solid var(--line)}.bar-column{flex:1;min-width:32px;display:flex;flex-direction:column;align-items:center;justify-content:end;font-size:12px;gap:8px}.bar-stack{width:28px;display:flex;flex-direction:column-reverse;justify-content:flex-start}.bar-stack span{background:var(--series);flex-shrink:0}.bar-column time{color:var(--muted);white-space:nowrap}td:nth-child(4){min-width:180px;max-width:300px;white-space:normal;overflow-wrap:anywhere}.reason-list{display:flex;gap:24px;flex-wrap:wrap;margin:20px 0}.reason-list p{margin:0}.reason-list strong{display:block;font-size:24px;color:#172033}
 </style>
 </head>
 <body><main>
@@ -18,6 +20,12 @@
 <form id="filters" class="controls"><div><label for="start">开始日期</label><input id="start" type="date"></div><div><label for="end">结束日期</label><input id="end" type="date"></div><button id="refresh">查询 / 刷新</button><button id="all" type="button">全部时间</button><button id="logout" type="button">退出</button></form>
 <p class="note" id="coverage"></p>
 <dl id="metrics"></dl>
+<div class="trend-head"><h2>任务趋势</h2><label for="interval">对比周期</label><select id="interval"><option value="daily">按日 · 最近 28 天</option><option value="weekly">按周 · 最近 12 周</option></select></div>
+<p class="note">按任务提交时间统计最终结果，周一为每周起点。空白日期表示 0 次；未受理请求单独列出，不算任务。趋势截止于筛选结束日期，默认今天。</p>
+<div id="legend" class="legend"></div><div id="trend" class="chart" role="img" aria-label="任务趋势柱状图"></div>
+<details><summary>查看趋势数据与未受理次数</summary><div class="table-scroll"><table><thead><tr><th>日期 / 周起点</th><th>已生成</th><th>输入限制</th><th>外部服务</th><th>服务运行</th><th>生成处理</th><th>原因未知</th><th>进行中</th><th>未受理</th></tr></thead><tbody id="trend-rows"></tbody></table></div></details>
+<h2>未完成原因</h2><div id="reasons" class="reason-list"></div><p class="note" id="rejections"></p>
+<p class="note">总体交付成功率 = 已生成 / 已结束任务，包含输入限制及外部故障。原因分类不等于缺陷认定，历史信息不足的保留为未知。</p>
 <h2>调用费用估算</h2>
 <div id="fees"><p>模型费用 · USD<strong id="llm-cost">—</strong></p><p>语音识别费用 · CNY<strong id="asr-cost">—</strong></p></div>
 <p class="note" id="cost-note"></p>
@@ -28,7 +36,24 @@
 </section>
 </main><script>
 const $=id=>document.getElementById(id);
-let token='';
+let token='', snapshot=null;
+const series=[['success','已生成','#2859ca'],['input','输入限制','#987018'],['external','外部服务','#ad493a'],['runtime','服务运行','#79538a'],['processing','生成处理','#304b61'],['unknown','原因未知','#687383'],['active','进行中','#548378']];
+function drawTrend(){
+ if(!snapshot)return;
+ const interval=$('interval').value, weekly=interval==='weekly';
+ const end=new Date(($('end').value||new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}))+'T00:00:00Z');
+ if(weekly)end.setUTCDate(end.getUTCDate()-(end.getUTCDay()+6)%7);
+ const map=new Map(snapshot.trends[interval].map(r=>[r.date,r])), rows=[];
+ for(let i=(weekly?12:28)-1;i>=0;i--){const day=new Date(end);day.setUTCDate(day.getUTCDate()-i*(weekly?7:1));const key=day.toISOString().slice(0,10);if($('start').value&&key< $('start').value && (!weekly||new Date(day.getTime()+6*86400000).toISOString().slice(0,10)<$('start').value))continue;rows.push(map.get(key)||{date:key});}
+ const max=Math.max(1,...rows.map(r=>series.reduce((n,[k])=>n+(r[k]||0),0)));
+ $('legend').replaceChildren();$('trend').replaceChildren();$('trend-rows').replaceChildren();
+ for(const [key,label,color] of series){const item=document.createElement('span');item.textContent=label;item.style.setProperty('--series',color);$('legend').append(item);}
+ for(const r of rows){const col=document.createElement('div');col.className='bar-column';const total=series.reduce((n,[k])=>n+(r[k]||0),0);const count=document.createElement('span');count.textContent=total;const stack=document.createElement('div');stack.className='bar-stack';stack.style.height='180px';stack.title=r.date+'：'+series.map(([k,l])=>l+' '+(r[k]||0)).join('，');for(const [k,l,color] of series){const part=document.createElement('span');part.style.height=((r[k]||0)/max*180)+'px';part.style.setProperty('--series',color);stack.append(part);}const dateLabel=document.createElement('time');dateLabel.textContent=r.date.slice(5);col.append(count,stack,dateLabel);$('trend').append(col);const tr=document.createElement('tr');cell(tr,r.date);for(const [k] of series)cell(tr,r[k]||0);cell(tr,r.rejected||0);$('trend-rows').append(tr);}
+ $('trend').scrollLeft=$('trend').scrollWidth;
+ if(!rows.length)$('trend').textContent='所选日期范围内暂无趋势数据。';
+ $('trend').setAttribute('aria-label',`${weekly?'按周':'按日'}任务趋势，${rows.length}个周期；详细数值见下方趋势数据表。`);
+}
+$('interval').onchange=drawTrend;
 const money=n=>n===null?'未知':n.toFixed(6);
 const date=n=>n===null||n===undefined?'时间未知':new Date(n*1000).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false});
 function cell(row,text,detail){const td=document.createElement('td');td.textContent=text;if(detail){const small=document.createElement('small');small.textContent=detail;td.append(small)}row.append(td)}
@@ -39,16 +64,19 @@ async function refresh(){
   const response=await fetch('/api/admin/stats?'+q,{headers:{Authorization:'Bearer '+token}});
   const data=await response.json();if(!response.ok)throw new Error(data.error||'读取失败，请重试');
   $('dashboard').hidden=false;$('login').hidden=true;$('key').value='';
+  snapshot=data;drawTrend();
+  $('reasons').replaceChildren();for(const [k,l] of series.filter(([k])=>!['success','active'].includes(k))){const p=document.createElement('p'),n=document.createElement('strong');p.textContent=l;n.textContent=data.failure_groups[k]||0;p.append(n);$('reasons').append(p);}
+  $('rejections').textContent='未受理原因：'+(Object.entries(data.rejection_reasons).map(([k,v])=>`${k} · ${v} 次`).join('；')||'无');
   const s=data.summary;$('metrics').replaceChildren();
-  for(const [label,value] of [['访问人数',s.visitors],['提交过任务的人数',s.submitting_visitors],['页面访问次数',s.page_views],['报告任务数',s.tasks],['成功报告',s.successful_reports],['失败任务',s.failed_tasks],['排队 / 处理中',s.active_tasks],['生成成功率',s.success_rate===null?'—':(s.success_rate*100).toFixed(1)+'%']]){
+  for(const [label,value] of [['访问人数',s.visitors],['提交过任务的人数',s.submitting_visitors],['页面访问次数',s.page_views],['报告任务数',s.tasks],['成功报告',s.successful_reports],['未完成任务',s.failed_tasks],['排队 / 处理中',s.active_tasks],['总体交付成功率',s.success_rate===null?'—':(s.success_rate*100).toFixed(1)+'%']]){
    const wrap=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;wrap.append(dt,dd);$('metrics').append(wrap);
   }
   $('coverage').textContent=`访问与提交记录从 ${date(data.tracking_since)} 开始累计；所选期间记录到 ${s.submission_attempts} 次提交尝试，其中 ${s.rejected_attempts} 次未受理。历史任务一并汇总，缺失的历史访问无法补算。日期按北京时间。`;
   $('llm-cost').textContent=money(s.llm_usd_estimate);$('asr-cost').textContent=money(s.asr_cny_estimate);
   $('cost-note').textContent=`模型已记录 ${s.llm_calls} 次调用、${s.tokens.toLocaleString()} tokens；${s.llm_unpriced_calls} 次调用金额未知，${s.llm_unrecorded_tasks} 个任务没有模型调用记录。${s.asr_unknown_tasks} 个任务的识别费用未知。识别单价：${data.asr_cny_per_second===null?'未配置':data.asr_cny_per_second+' 元/秒'}。`;
   $('rows').replaceChildren();$('table-caption').textContent=s.tasks?`共 ${s.tasks} 个任务；${s.legacy_tasks_without_owner} 个历史任务无访客标识。`:'所选期间暂无任务记录。';
-  const states={RENDERED:'已生成',FAILED:'失败',QUEUED:'排队中',RUNNING:'处理中'};
-  for(const r of data.runs){const tr=document.createElement('tr');cell(tr,date(r.submitted_at));cell(tr,r.owner||'历史访客未知',r.run_id);cell(tr,r.video_id||'—');cell(tr,states[r.state]||r.state);cell(tr,r.elapsed_seconds===null?'—':Math.round(r.elapsed_seconds)+' 秒');cell(tr,r.llm_calls,r.tokens+' tokens');cell(tr,money(r.llm_usd_estimate),r.llm_unpriced_calls?`${r.llm_unpriced_calls} 次金额未知`:null);cell(tr,money(r.asr_cny_estimate),{local:'本地识别',reused:'复用转写',duration_estimate:'按时长估算',unknown:'金额未知'}[r.asr_basis]);$('rows').append(tr)}
+  const states={RENDERED:'已生成',FAILED:'未完成',QUEUED:'排队中',RUNNING:'处理中'};
+  for(const r of data.runs){const tr=document.createElement('tr');cell(tr,date(r.submitted_at));cell(tr,r.owner||'历史访客未知',r.run_id);cell(tr,r.video_id||'—');cell(tr,r.failure_group ? (series.find(([k])=>k===r.failure_group)?.[1]||'原因未知') : states[r.state]||r.state,r.error ? `${r.error} [${r.error_code||'UNKNOWN'}]${r.http_status ? ' HTTP '+r.http_status : ''}${r.provider_code ? ' / '+r.provider_code : ''}` : null);cell(tr,r.elapsed_seconds===null?'—':Math.round(r.elapsed_seconds)+' 秒');cell(tr,r.llm_calls,r.tokens+' tokens');cell(tr,money(r.llm_usd_estimate),r.llm_unpriced_calls?`${r.llm_unpriced_calls} 次金额未知`:null);cell(tr,money(r.asr_cny_estimate),{local:'本地识别',reused:'复用转写',duration_estimate:'按时长估算',unknown:'金额未知'}[r.asr_basis]);$('rows').append(tr)}
   $('message').textContent='';
  }catch(error){$('message').textContent=error.message;$('dashboard').hidden=true;$('login').hidden=false}
  finally{$('refresh').disabled=false}

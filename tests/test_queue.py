@@ -2,9 +2,12 @@ import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 
+import video_report_agent.queue as queue_module
 from video_report_agent.pipeline import create_run, write_json
 from video_report_agent.queue import AdmissionError, RunQueue
 from video_report_agent.session import OwnerSessions
@@ -87,6 +90,118 @@ def test_atomic_admission(tmp_path):
         assert len(list(tmp_path.glob("*/input.json"))) == 3
     finally:
         release.set()
+        queue.close()
+
+
+def test_daily_limit_rejects_fourth_admission(tmp_path):
+    release = threading.Event()
+    create_calls = 0
+
+    def generate(run):
+        release.wait(3)
+        write_json(run / "status.json", {"state": "RENDERED"})
+
+    def create():
+        nonlocal create_calls
+        create_calls += 1
+        return create_run(tmp_path, "BV1aTtb6uE7d")
+
+    queue = RunQueue(tmp_path, generate, max_active_per_owner=10)
+    try:
+        for _ in range(3):
+            queue.submit("a", create)
+        with pytest.raises(AdmissionError, match="DAILY_USER_LIMIT"):
+            queue.submit("a", create)
+        assert create_calls == 3
+    finally:
+        release.set()
+        queue.close()
+
+
+def test_daily_limit_is_atomic_under_concurrent_admission(tmp_path):
+    release = threading.Event()
+
+    def generate(run):
+        release.wait(3)
+        write_json(run / "status.json", {"state": "RENDERED"})
+
+    def submit():
+        try:
+            return queue.submit("a", lambda: create_run(tmp_path, "BV1aTtb6uE7d"))
+        except AdmissionError as exc:
+            return str(exc)
+
+    queue = RunQueue(tmp_path, generate, max_active_per_owner=10)
+    try:
+        with ThreadPoolExecutor(max_workers=10) as callers:
+            outcomes = list(callers.map(lambda _: submit(), range(10)))
+        assert outcomes.count("DAILY_USER_LIMIT") == 7
+        assert len(queue.records) == 3
+    finally:
+        release.set()
+        queue.close()
+
+
+def test_daily_limit_uses_beijing_natural_day(tmp_path, monkeypatch):
+    shanghai = ZoneInfo("Asia/Shanghai")
+    current = [datetime(2026, 9, 13, 23, 59, tzinfo=shanghai).timestamp()]
+    monkeypatch.setattr(queue_module.time, "time", lambda: current[0])
+    release = threading.Event()
+
+    def generate(run):
+        release.wait(3)
+        write_json(run / "status.json", {"state": "RENDERED"})
+
+    queue = RunQueue(tmp_path, generate, max_active_per_owner=10)
+    try:
+        for _ in range(3):
+            queue.submit("a", lambda: create_run(tmp_path, "BV1aTtb6uE7d"))
+        current[0] = datetime(2026, 9, 14, 0, 1, tzinfo=shanghai).timestamp()
+        queue.submit("a", lambda: create_run(tmp_path, "BV1aTtb6uE7d"))
+        assert len(queue.records) == 4
+    finally:
+        release.set()
+        queue.close()
+
+
+def test_daily_limit_survives_restart(tmp_path):
+    release = threading.Event()
+
+    def generate(run):
+        release.wait(3)
+        write_json(run / "status.json", {"state": "RENDERED"})
+
+    queue = RunQueue(tmp_path, generate, max_active_per_owner=10)
+    for _ in range(3):
+        queue.submit("a", lambda: create_run(tmp_path, "BV1aTtb6uE7d"))
+    release.set()
+    queue.close()
+
+    restarted = RunQueue(tmp_path, generate, max_active_per_owner=10)
+    try:
+        with pytest.raises(AdmissionError, match="DAILY_USER_LIMIT"):
+            restarted.submit("a", lambda: create_run(tmp_path, "BV1aTtb6uE7d"))
+    finally:
+        restarted.close()
+
+
+def test_failed_create_does_not_use_daily_limit(tmp_path):
+    def generate(run):
+        write_json(run / "status.json", {"state": "RENDERED"})
+
+    def fail_create():
+        raise RuntimeError("create failed")
+
+    queue = RunQueue(tmp_path, generate, max_active_per_owner=10)
+    try:
+        for _ in range(3):
+            with pytest.raises(RuntimeError, match="create failed"):
+                queue.submit("a", fail_create)
+        for _ in range(3):
+            queue.submit("a", lambda: create_run(tmp_path, "BV1aTtb6uE7d"))
+        with pytest.raises(AdmissionError, match="DAILY_USER_LIMIT"):
+            queue.submit("a", lambda: create_run(tmp_path, "BV1aTtb6uE7d"))
+    finally:
         queue.close()
 
 

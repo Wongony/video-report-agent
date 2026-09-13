@@ -146,3 +146,40 @@ def test_admin_disabled_by_default(tmp_path, monkeypatch):
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+def test_daily_quota_http_response_and_ledger(tmp_path, monkeypatch):
+    import time
+    def generate(run):
+        write_json(run / 'status.json', {'run_id': run.name, 'state': 'FAILED'})
+    monkeypatch.setattr('video_report_agent.web.generate', generate)
+    server = create_server(tmp_path, 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    client = build_opener(HTTPCookieProcessor(CookieJar()))
+    base = f'http://127.0.0.1:{server.server_port}'
+    try:
+        for _ in range(3):
+            with client.open(Request(base + '/api/visual-report/runs',
+                                    data=b'{"url":"BV1aTtb6uE7d"}')) as response:
+                assert response.status == 202
+                response.read()
+            for _ in range(100):
+                with client.open(base + '/api/visual-report/runs') as response:
+                    payload = json.load(response)
+                # Wait for persistent terminal state before submitting the same video.
+                if all(r['state'] == 'FAILED' for r in payload['runs']):
+                    break
+                time.sleep(.01)
+        with pytest.raises(HTTPError) as error:
+            client.open(Request(base + '/api/visual-report/runs',
+                                data=b'{"url":"BV1aTtb6uE7d"}'))
+        assert error.value.code == 429
+        assert json.load(error.value)['error_code'] == 'DAILY_USER_LIMIT'
+        stats = Analytics(tmp_path).snapshot()
+        assert stats['summary']['tasks'] == 3
+        assert stats['rejection_reasons'] == {'DAILY_USER_LIMIT': 1}
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()

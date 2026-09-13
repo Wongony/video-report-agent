@@ -5,9 +5,11 @@ import math
 import threading
 import time
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+from .failures import failure_group
 
 ZONE = ZoneInfo("Asia/Shanghai")
 
@@ -131,13 +133,44 @@ class Analytics:
             rows.append({
                 "run_id": path.parent.name, "owner": owner, "submitted_at": at,
                 "state": state, "video_id": metadata.get("video_id"),
+                "failure_group": failure_group({**status, "state": state}),
+                "error_code": status.get("error_code", status.get("error_category")),
+                "error": status.get("error"),
+                "http_status": status.get("http_status"),
+                "provider_code": status.get("provider_code"),
                 "elapsed_seconds": max(0, finished - started)
                 if number(finished) and number(started) else None,
                 **call_costs(path.parent, status, self.asr_rate),
             })
         states = Counter(r["state"] for r in rows)
         ended = states["RENDERED"] + states["FAILED"]
+        reasons = Counter(r["failure_group"] for r in rows if r["failure_group"])
+        trends = {}
+        for interval in ("daily", "weekly"):
+            buckets = {}
+            def bucket(at):
+                if not number(at):
+                    return None
+                day = datetime.fromtimestamp(at, ZONE).date()
+                if interval == "weekly":
+                    day -= timedelta(days=day.weekday())
+                return buckets.setdefault(day.isoformat(), Counter())
+            for row in rows:
+                counts = bucket(row["submitted_at"])
+                if counts is not None:
+                    counts["tasks"] += 1
+                    counts["success" if row["state"] == "RENDERED" else
+                           row["failure_group"] or "active"] += 1
+            for event in submissions:
+                counts = bucket(event.get("at"))
+                if counts is not None and event.get("http_status") != 202:
+                    counts["rejected"] += 1
+            trends[interval] = [{"date": day, **counts} for day, counts in sorted(buckets.items())]
         return {
+            "failure_groups": dict(reasons),
+            "rejection_reasons": dict(Counter(e.get("error_code") or "UNKNOWN" for e in submissions
+                                               if e.get("http_status") != 202)),
+            "trends": trends,
             "tracking_since": since, "timezone": "Asia/Shanghai",
             "asr_cny_per_second": self.asr_rate,
             "summary": {

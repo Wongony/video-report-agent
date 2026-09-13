@@ -117,7 +117,9 @@ def create_server(
 
         def send(self, status, body, content_type="application/json; charset=utf-8"):
             if self.command == "POST" and self.path == "/api/visual-report/runs":
-                analytics.record("submit", self.owner, http_status=status)
+                analytics.record("submit", self.owner, http_status=status,
+                                 error_code=body.get("error_code", body.get("error_category"))
+                                 if isinstance(body, dict) else None)
             if not isinstance(body, bytes):
                 body = json.dumps(body, ensure_ascii=False).encode()
             self.send_response(status)
@@ -303,8 +305,11 @@ def create_server(
                     "USER_ACTIVE_LIMIT": "你的待处理任务已达上限，请等待任务完成。",
                     "QUEUE_FULL": "等待队列已满，请稍后再提交。",
                     "SERVER_STOPPING": "服务正在关闭，请稍后重试。",
+                    "DAILY_USER_LIMIT": ("今日已受理 3 次任务，已达到每日上限，"
+                                         "请在北京时间明天 00:00 后再试。"),
                 }
-                return self.send(429, {"error_category": str(exc), "error": messages[str(exc)]})
+                return self.send(429, {"error_category": str(exc), "error_code": str(exc),
+                                       "error": messages[str(exc)]})
             except (
                 ValueError,
                 KeyError,

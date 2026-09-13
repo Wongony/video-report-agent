@@ -248,10 +248,14 @@ def download_bilibili_video(
     command.append(source.canonical_url)
     completed = _run_command(command, runner, category="DOWNLOAD_ERROR")
     (run_dir / "download.log").write_text(str(getattr(completed, "stderr", "")))
-    if not str(getattr(completed, "stdout", "")).strip() and "does not pass filter" in str(
-        getattr(completed, "stderr", "")
+    if getattr(completed, "returncode", None) == 101 or (
+        not str(getattr(completed, "stdout", "")).strip()
+        and "does not pass filter" in str(getattr(completed, "stderr", ""))
     ):
-        raise UrlIngestError("VIDEO_DURATION_INVALID", "视频超过 3 小时或无法确认时长。")
+        raise UrlIngestError(
+            "VIDEO_DURATION_INVALID",
+            "当前支持的视频最长为 3 小时，请选择不超过 3 小时的视频。",
+        )
     if getattr(completed, "returncode", 1) != 0:
         if "HTTP Error 412" in str(getattr(completed, "stderr", "")):
             raise UrlIngestError(

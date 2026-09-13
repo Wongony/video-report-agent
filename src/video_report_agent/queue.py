@@ -6,11 +6,14 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from .pipeline import write_json
 
 TERMINAL = {"RENDERED", "FAILED"}
+SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
 
 
 class AdmissionError(ValueError):
@@ -19,9 +22,16 @@ class AdmissionError(ValueError):
 
 class RunQueue:
     def __init__(
-        self, root, generate, *, max_concurrency=1, max_active_per_owner=2, max_queue_length=20
+        self,
+        root,
+        generate,
+        *,
+        max_concurrency=1,
+        max_active_per_owner=2,
+        max_queue_length=20,
+        daily_user_limit=3,
     ):
-        if min(max_concurrency, max_active_per_owner, max_queue_length) < 1:
+        if min(max_concurrency, max_active_per_owner, max_queue_length, daily_user_limit) < 1:
             raise ValueError("Queue limits must be positive")
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
@@ -35,6 +45,7 @@ class RunQueue:
         self.max_concurrency = max_concurrency
         self.max_active_per_owner = max_active_per_owner
         self.max_queue_length = max_queue_length
+        self.daily_user_limit = daily_user_limit
         self.lock = threading.RLock()
         self.records = {}
         self.waiting = []
@@ -122,6 +133,15 @@ class RunQueue:
             )
             if active >= self.max_active_per_owner:
                 raise AdmissionError("USER_ACTIVE_LIMIT")
+            today = datetime.fromtimestamp(time.time(), SHANGHAI_TZ).date()
+            daily_admissions = sum(
+                record["owner_id"] == owner_id
+                and isinstance(record.get("queued_at"), (int, float))
+                and datetime.fromtimestamp(record["queued_at"], SHANGHAI_TZ).date() == today
+                for record in self.records.values()
+            )
+            if daily_admissions >= self.daily_user_limit:
+                raise AdmissionError("DAILY_USER_LIMIT")
             if len(self.waiting) >= self.max_queue_length:
                 raise AdmissionError("QUEUE_FULL")
             run = create()

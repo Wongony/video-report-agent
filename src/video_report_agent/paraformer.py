@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import time
 from pathlib import Path
 
@@ -14,14 +15,27 @@ from .redaction import redact
 
 
 class CloudAsrError(AsrError):
-    def __init__(self, stage, detail, task_id=None):
+    def __init__(self, stage, detail, task_id=None, *, http_status=None, provider_code=None):
+        self.http_status = http_status
+        self.provider_code = provider_code
         self.stage = stage
         self.task_id = task_id
         self.detail = redact(detail)
         super().__init__(f"Paraformer {stage}: {self.detail}")
 
     def to_dict(self):
-        return {"stage": self.stage, "task_id": self.task_id, "detail": self.detail}
+        return {"stage": self.stage, "task_id": self.task_id, "detail": self.detail,
+                "http_status": self.http_status, "provider_code": self.provider_code}
+
+
+def provider_code(payload):
+    """Keep a bounded code, never a response body, URL, or credential."""
+    code = payload.get("code") if isinstance(payload, dict) else None
+    if (isinstance(code, str)
+            and re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{0,100}", code)
+            and not code.startswith("sk-")):
+        return code
+    return None
 
 
 class ParaformerBackend:
@@ -128,7 +142,10 @@ class ParaformerBackend:
 
                 write_json(self.task_path, {"task_id": task_id})
             if response.status_code >= 500 or (response.is_success and not task_id):
-                raise CloudAsrError("submit_unknown", "提交状态未知；未自动重新提交", task_id)
+                raise CloudAsrError(
+                    "submit_unknown", "提交状态未知；未自动重新提交", task_id,
+                    http_status=response.status_code, provider_code=provider_code(submitted),
+                )
             response.raise_for_status()
             if not task_id:
                 raise CloudAsrError("submit", "Response has no task_id")
@@ -142,7 +159,8 @@ class ParaformerBackend:
                 if state == "SUCCEEDED":
                     break
                 if state not in {"PENDING", "RUNNING"}:
-                    raise CloudAsrError(stage, {"task_status": state}, task_id)
+                    raise CloudAsrError(stage, {"task_status": state}, task_id,
+                                        provider_code=provider_code(completed["output"]))
                 time.sleep(
                     min(
                         self.poll_seconds,
@@ -158,7 +176,8 @@ class ParaformerBackend:
             result = completed["output"]["results"][0]
             if result.get("subtask_status") != "SUCCEEDED":
                 raise CloudAsrError(
-                    stage, {"subtask_status": result.get("subtask_status")}, task_id
+                    stage, {"subtask_status": result.get("subtask_status")}, task_id,
+                    provider_code=provider_code(result)
                 )
             # Do not send the API key to the result-storage host.
             response = client.get(result["transcription_url"], follow_redirects=True)
@@ -213,6 +232,13 @@ class ParaformerBackend:
             )
         except CloudAsrError:
             raise
+        except httpx.HTTPStatusError as exc:
+            try:
+                code = provider_code(exc.response.json())
+            except ValueError:
+                code = None
+            raise CloudAsrError(stage, "HTTP request rejected", task_id,
+                                http_status=exc.response.status_code, provider_code=code) from None
         except Exception as exc:
             # Exception strings can contain signed URLs, request headers, or bodies.
             raise CloudAsrError(stage, type(exc).__name__, task_id) from None

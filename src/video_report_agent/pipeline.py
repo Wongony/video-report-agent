@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .asr import AsrError, transcribe_audio
 from .audio import AudioExtractionError, extract_audio
+from .failures import asr_failure
 from .ingest import UrlIngestError, download_bilibili_video, validate_bilibili_url
 from .media_config import resolve_media_config
 from .paraformer import CloudAsrError
@@ -186,6 +187,18 @@ def generate(run: Path) -> dict:
             category = "ENVIRONMENT_FAILURE"
         else:
             category = "IMPLEMENTATION_FAILURE"
-        update("FAILED", error_category=category, error=str(exc))
+        code, message = category, str(exc)
+        diagnostics = {}
+        if isinstance(exc, CloudAsrError):
+            code, message = asr_failure(exc)
+            diagnostics = {"http_status": exc.http_status, "provider_code": exc.provider_code,
+                           "failed_stage": exc.stage}
+        elif isinstance(exc, UrlIngestError):
+            code = exc.category
+            if code in {"VIDEO_DURATION_INVALID", "URL_INVALID"}:
+                category = "INPUT_REJECTED"
+            elif code == "DOWNLOAD_ERROR" and str(exc) == "yt-dlp failed":
+                message = "视频下载失败，可能是视频不可访问或下载服务异常，请稍后重试。"
+        update("FAILED", error_category=category, error_code=code, error=message, **diagnostics)
     cleanup_media(run.parent)
     return status

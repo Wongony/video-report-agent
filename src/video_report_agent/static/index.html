@@ -262,7 +262,7 @@
       <input id="url" name="url" type="text"
              placeholder="粘贴视频链接、分享文案或 BV 号" autocomplete="off">
       <div id="source-info" class="source-info" aria-live="polite">
-        支持公开视频链接、带【标题】的分享文案或完整 BV 号；BV 号默认使用 P1。
+        支持最长 3 小时的公开视频；BV 号默认使用 P1。每个浏览器标识每天最多受理 3 次任务（含失败），北京时间 00:00 重置。
       </div>
       <button id="generate" type="button">生成 Visual Report</button>
       <div class="status" aria-live="polite" aria-atomic="true" aria-busy="false">
@@ -606,7 +606,7 @@
           '按队列顺序和每人一个执行名额调度，轮到后自动开始。' :
           ((data.state === 'RENDERED' ? '报告已经生成，可以立即查看。' :
             '') +
-          (data.error_category ? ` 错误类别：${data.error_category}。${data.error || ''}` : ''));
+          (data.error_category ? `${data.error || '处理未完成，请稍后重试。'}（错误码：${data.error_code || data.error_category}）` : ''));
         statusDetail.hidden = !statusDetail.textContent;
         reportLink.hidden = !data.report_url;
         if (data.report_url) reportLink.href = data.report_url;
@@ -712,7 +712,7 @@
             if (report.state === 'FAILED') {
               const error = document.createElement('p');
               error.className = 'history-error';
-              error.textContent = report.error || report.error_category || '运行失败，未记录具体错误。';
+              error.textContent = (report.error || '运行未完成，未记录具体原因。') + `（错误码：${report.error_code || report.error_category || 'UNKNOWN'}）`;
               item.append(copy, error);
               return item;
             }
@@ -767,7 +767,7 @@
             })
           });
           const data = await response.json();
-          if (!response.ok) throw new Error(data.error || data.error_category || 'run_rejected');
+          if (!response.ok) throw new Error((data.error || '提交未受理') + `（错误码：${data.error_code || data.error_category || 'REQUEST_REJECTED'}）`);
           currentRunId = data.run_id;
           showStatus(data);
           polling = false;
