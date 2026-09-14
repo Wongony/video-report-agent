@@ -1,19 +1,10 @@
-# Video Report Agent
+# Video Report Agent — Public Core
 
-This is an independent, lean product derived from video-evidence-agent.
-The Owner authorized replacing the historical V0/V1.1/V1.2 architecture on 2026-09-08.
-Those historical contracts and evidence live in the original repository.
+This is the public ASR / transcript / Pi / basic Skill / renderer / CLI package.
+Hosted accounts, credits, web routes, administration, production Skill and deployment belong to the private service repository. Do not copy private source or merge private history here.
 
-Keep the existing frontend, Bilibili ingestion, FFmpeg, MLX Whisper and Transcript Foundation.
-Default to asr-only; retain optional subtitles/OCR/Fusion and Canonical Transcript.
-Pi consumes the same canonical transcript projection regardless of input mode.
-The generation path is Python → Pi RPC → video-report skill → DeepSeek → report.html.
-Pi owns the agent loop, standard tools, session runtime and compaction.
-Do not add planners, critics, revision workflows, multi-agent orchestration or compatibility layers.
-Each generation runs in runs/<id>; never use project source as Pi's writable cwd.
-This is a local tool with a workspace convention, not an OS sandbox.
+Keep a single sequential Python → Pi RPC → Skill generation path. Pi owns the agent loop. Each generation writes only to its run workspace. Use the smallest sufficient change; no speculative orchestration or unrelated refactors.
 
-Use the smallest sufficient change. Do not refactor unrelated code or add speculative infrastructure.
-Use project-local .venv and uv run; update dependencies with uv add/remove and preserve uv.lock.
-Run relevant tests. Never represent mocked checks as real end-to-end evidence.
-Do not commit, push or deploy without an explicit request.
+Use project-local .venv and uv. Run relevant tests. Do not claim fixture checks prove live model quality. Do not commit or push without user authorization.
+
+Keep maintained docs and examples in docs/. Local implementation notes belong in .local/docs/ (ignored).

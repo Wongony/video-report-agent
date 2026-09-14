@@ -13,7 +13,7 @@ from .pipeline import write_json
 RUN_TIMEOUT_SECONDS = 30 * 60
 
 
-def generate(run: Path, *, timeout=RUN_TIMEOUT_SECONDS) -> dict:
+def generate(run: Path, *, timeout=RUN_TIMEOUT_SECONDS, env: dict[str, str] | None = None) -> dict:
     run = run.resolve()
     command = [
         sys.executable, "-c",
@@ -24,6 +24,7 @@ def generate(run: Path, *, timeout=RUN_TIMEOUT_SECONDS) -> dict:
     with (run / "worker.log").open("ab") as log:
         process = subprocess.Popen(
             command, stdout=log, stderr=log, start_new_session=True,
+            env={**os.environ, **env} if env is not None else None,
         )
         timed_out = False
         try:

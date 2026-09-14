@@ -8,6 +8,14 @@ Turn video transcripts into self-contained HTML reading reports. **Use ASR + the
 
 The developer runs MLX Whisper locally on an Apple Silicon Mac. That is the developer's setup: Windows users can choose an ASR model compatible with their own hardware or use a speech-to-text API, then pass the transcript to the Skill.
 
+## Public Core / Hosted Proprietary Extensions
+
+This repository contains the public Agent Core and is the project showcase. **[Try the hosted Video Report](https://vreport.tri4t.xyz)**.
+
+Public components include ASR, Canonical Transcript, the Pi agent harness, tools, the basic Skill, report rendering, CLI, benchmarks, and tests. Accounts, credits, access control, production queues, administration, analytics, the production Skill, and deployment belong to a separate private service. See the live site for currently available features.
+
+The hosted service contains proprietary production components not included in this repository. It depends on this core package rather than maintaining a second copy. The previous full application remains in Git history; the current version does not include the website server.
+
 ## Quick start: use your own Coding Agent
 
 > Video / audio → your choice of ASR → transcript → Coding Agent + video-report Skill → report.html
@@ -63,7 +71,7 @@ Open `output/report.html` in a browser. The Skill guides content organization, s
 
 ## Preview
 
-**Web homepage · default state**
+**Hosted website preview (server not included)**
 
 ![Web homepage in its default state](docs/images/web-home.png)
 
@@ -77,9 +85,9 @@ The image below shows the top of the report. Follow the links for the complete r
 
 On GitHub, the HTML link opens the file page; download it and open it in a browser to read. The example files are included in the repository and do not require a running local service.
 
-## Optional: run the complete local project
+## Optional: run the public core CLI
 
-Run the local Web UI if you want to paste a Bilibili URL and automate downloading, transcription, report generation, and report history.
+Use the CLI to automate downloading, transcription, and report generation without a website server.
 
 > Bilibili URL → yt-dlp → FFmpeg → ASR → Canonical Transcript → Pi RPC + Skill → report.html
 
@@ -133,18 +141,10 @@ The `paraformer` backend supports `paraformer-v1`, `paraformer-v2`, and the Fun-
 ### Start and generate
 
 ```sh
-uv run video-report web --port 8765
-```
-
-Open [http://127.0.0.1:8765](http://127.0.0.1:8765), paste a public Bilibili HTTPS URL or full BV number, and click **生成 Visual Report**. Use `?p=2` to select a page in a multi-page video.
-
-Or use the CLI:
-
-```sh
 uv run video-report generate 'https://www.bilibili.com/video/BV...' --transcript-mode asr-only
 ```
 
-Outputs are saved in `runs/<run-id>/`, including `transcript.md`, provenance records, and `report.html`. The local Web UI also offers a Chromium-generated full-page screenshot, `report.png`.
+Outputs are saved in `runs/<run-id>/`, including `transcript.md`, provenance records, and `report.html`. The pipeline also exports a Chromium-generated full-page screenshot, `report.png`.
 
 ## Project behavior and boundaries
 
@@ -163,3 +163,9 @@ uv lock --check
 ```
 
 See [`video-report/SKILL.md`](src/video_report_agent/skills/video-report/SKILL.md) for report-writing instructions and [`report-template.html`](src/video_report_agent/skills/video-report/assets/report-template.html) for the default styles.
+
+## Core package configuration
+
+The CLI reads `.env` from the working directory. Pi state lives in `config/pi/` there, never in the installed package. The first generation initializes `models.json` from packaged defaults without replacing existing settings. Set `PI_CODING_AGENT_DIR` in the process environment to choose another directory.
+
+The packaged basic Skill is the default. Callers can select a complete Skill directory with `PiRunner(skill_dir=...)` or the worker environment variable `VIDEO_REPORT_SKILL_DIR`.

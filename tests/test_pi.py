@@ -181,3 +181,31 @@ def test_selected_provider_saved_key_takes_precedence(tmp_path, monkeypatch):
     monkeypatch.setenv("PI_PROVIDER", "deepseek")
     monkeypatch.setenv("PI_API_KEY", "old-key")
     assert PiRunner(provider="deepseek", model="test").api_key is None
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_custom_skill_directory(tmp_path, monkeypatch, explicit):
+    custom = tmp_path / "custom"
+    (custom / "assets").mkdir(parents=True)
+    (custom / "SKILL.md").write_text("custom skill marker")
+    (custom / "assets/report-template.html").write_text("custom template marker")
+    executable = tmp_path / "fake-pi"
+    executable.write_text("""#!/usr/bin/env python3
+import json, sys
+assert open("SKILL.md").read() == "custom skill marker"
+assert open("assets/report-template.html").read() == "custom template marker"
+json.loads(sys.stdin.readline())
+open("report.html", "w").write("<html><body>fixture</body></html>")
+print(json.dumps({"type":"message_end","message":{"role":"assistant","stopReason":"stop"}}))
+print(json.dumps({"type":"agent_settled"}), flush=True)
+""")
+    executable.chmod(0o755)
+    monkeypatch.setattr("video_report_agent.pi.shutil.which", lambda _: str(executable))
+    monkeypatch.setattr("video_report_agent.pi.PI_AGENT_DIR", tmp_path / "config")
+    monkeypatch.setenv("VIDEO_REPORT_SKILL_DIR", str(tmp_path / "wrong" if explicit else custom))
+    workspace = tmp_path / "run"
+    workspace.mkdir()
+    (workspace / "transcript.md").write_text("fixture")
+    runner = PiRunner(skill_dir=custom if explicit else None)
+    assert asyncio.run(runner.run(workspace)) == workspace / "report.html"
+    assert (tmp_path / "config/models.json").is_file()

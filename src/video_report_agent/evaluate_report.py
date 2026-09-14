@@ -11,9 +11,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from .analytics import call_costs
 from .inspect_report import inspect_report
 from .pi import PROJECT_ROOT, SKILL, PiRunner
+from .usage import call_costs
 
 
 def write_json(path, value):

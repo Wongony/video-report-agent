@@ -11,8 +11,8 @@ from pathlib import Path
 
 from .report_content import fill_video_description
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-PI_AGENT_DIR = PROJECT_ROOT / "config" / "pi"
+PROJECT_ROOT = Path.cwd()
+PI_AGENT_DIR = Path(os.getenv("PI_CODING_AGENT_DIR", str(PROJECT_ROOT / "config" / "pi"))).resolve()
 SKILL = Path(__file__).parent / "skills" / "video-report"
 DEFAULT_PROVIDER = "deepseek"
 DEFAULT_MODEL = "deepseek-flash"
@@ -35,7 +35,9 @@ class PiRunner:
         timeout: float = 1800,
         thinking: str | None = None,
         review: bool | None = None,
+        skill_dir: Path | None = None,
     ):
+        self.skill_dir = Path(skill_dir or os.getenv("VIDEO_REPORT_SKILL_DIR") or SKILL).resolve()
         self.provider = provider or os.getenv("PI_PROVIDER", DEFAULT_PROVIDER)
         self.model = model or os.getenv("PI_MODEL", DEFAULT_MODEL)
         configured_key = api_key if api_key is not None else (
@@ -59,11 +61,15 @@ class PiRunner:
         if executable is None:
             raise PiError("ENVIRONMENT_FAILURE", "pi is not installed")
         PI_AGENT_DIR.mkdir(parents=True, exist_ok=True)
+        if not (PI_AGENT_DIR / "models.json").exists():
+            shutil.copy2(
+                Path(__file__).with_name("defaults") / "models.json", PI_AGENT_DIR / "models.json",
+            )
         env = os.environ.copy()
         env["PI_CODING_AGENT_DIR"] = str(PI_AGENT_DIR)
         env["VIDEO_REPORT_PYTHON"] = sys.executable
         skill = workspace
-        shutil.copytree(SKILL, workspace, dirs_exist_ok=True)
+        shutil.copytree(self.skill_dir, workspace, dirs_exist_ok=True)
         (workspace / "assets").mkdir(exist_ok=True)
         command = [
             executable,

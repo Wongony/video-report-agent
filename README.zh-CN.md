@@ -8,6 +8,14 @@
 
 开发者在 Apple Silicon Mac 上使用 MLX Whisper 完成本地转写。这是开发者的运行环境；Windows 用户可以选择适合自己设备的 ASR 模型，也可以调用语音转写 API，再把文字稿交给 Skill。
 
+## 公开核心与在线服务
+
+本仓库是公开 Agent Core 和项目展示入口。在线体验：**[Video Report](https://vreport.tri4t.xyz)**。
+
+公开部分包含 ASR、Canonical Transcript、Pi Agent 调用、工具、基础 Skill、报告渲染、CLI、评测与测试。在线服务的账户、额度、访问控制、生产队列、管理后台、统计、生产 Skill 和部署配置由独立私有仓库维护，不包含在本仓库中。网站当前可用功能以在线版本为准。
+
+私有服务直接依赖本核心包，不维护第二份核心源码。旧版完整应用保留在 Git 历史中；当前版本不再提供网站服务端。
+
 ## 快速开始：在自己的 Coding Agent 中生成报告
 
 > 视频 / 音频 → 自选 ASR → 转写文本 → Coding Agent + video-report Skill → report.html
@@ -63,7 +71,7 @@ my-report/
 
 ## 效果展示
 
-**Web 主页 · 默认状态**
+**在线服务主页展示（服务端不包含在本仓库）**
 
 ![Web 前端主页默认状态](docs/images/web-home.png)
 
@@ -77,9 +85,9 @@ my-report/
 
 在 GitHub 中，HTML 链接打开文件页面；下载后用浏览器打开即可阅读。示例文件随仓库提供，无需启动本地服务。
 
-## 可选：运行完整的本地项目
+## 可选：运行公开核心 CLI
 
-如果需要粘贴 Bilibili 链接后自动下载、转写、生成报告并查看历史，可以运行本仓库的本地 Web UI。
+使用 CLI 自动下载、转写并生成报告；无需网站服务。
 
 > Bilibili URL → yt-dlp → FFmpeg → ASR → Canonical Transcript → Pi RPC + Skill → report.html
 
@@ -133,18 +141,10 @@ DASHSCOPE_API_KEY=your-dashscope-api-key
 ### 启动与生成
 
 ```sh
-uv run video-report web --port 8765
-```
-
-打开 [http://127.0.0.1:8765](http://127.0.0.1:8765)，粘贴公开的 Bilibili HTTPS 链接或完整 BV 号，点击“生成 Visual Report”。多 P 视频可用 `?p=2` 选择分 P。
-
-也可以使用 CLI：
-
-```sh
 uv run video-report generate 'https://www.bilibili.com/video/BV...' --transcript-mode asr-only
 ```
 
-产物保存在 `runs/<run-id>/`，包括 `transcript.md`、来源记录和 `report.html`。本地 Web UI 还提供通过 Chromium 生成的报告长图 `report.png`。
+产物保存在 `runs/<run-id>/`，包括 `transcript.md`、来源记录和 `report.html`。流水线还通过 Chromium 导出报告长图 `report.png`。
 
 ## 项目行为与边界
 
@@ -163,3 +163,9 @@ uv lock --check
 ```
 
 报告写作规则见 [`video-report/SKILL.md`](src/video_report_agent/skills/video-report/SKILL.md)，默认样式见 [`report-template.html`](src/video_report_agent/skills/video-report/assets/report-template.html)。
+
+## 核心包配置
+
+在项目运行目录读取 `.env`，Pi 状态保存在该目录的 `config/pi/`，不会写入安装包目录。首次生成会从包内模板初始化 `models.json`，已有配置不覆盖。可用 `PI_CODING_AGENT_DIR` 环境变量指定其他目录。
+
+默认使用包内基础 Skill；调用方可以通过 `PiRunner(skill_dir=...)` 或 worker 环境变量 `VIDEO_REPORT_SKILL_DIR` 选择完整 Skill 目录。
