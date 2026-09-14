@@ -4,17 +4,9 @@
 
 [English](README.md) | 简体中文
 
-把视频转写整理成自包含的 HTML 精读报告。**只需 ASR + video-report Skill，就可以在自己的 Coding Agent 中生成报告，无需部署整个项目。**
+把视频整理成自包含的 HTML 精读报告。**[打开在线网站](https://vreport.tri4t.xyz)**，直接生成和阅读报告。
 
-开发者在 Apple Silicon Mac 上使用 MLX Whisper 完成本地转写。这是开发者的运行环境；Windows 用户可以选择适合自己设备的 ASR 模型，也可以调用语音转写 API，再把文字稿交给 Skill。
-
-## 公开核心与在线服务
-
-本仓库是公开 Agent Core 和项目展示入口。在线体验：**[Video Report](https://vreport.tri4t.xyz)**。
-
-公开部分包含 ASR、Canonical Transcript、Pi Agent 调用、工具、共享 Skill、报告渲染、CLI、合成 smoke eval 与测试。在线服务的账户、额度、访问控制、生产队列、管理后台、统计 和部署配置由独立私有仓库维护，不包含在本仓库中。网站当前可用功能以在线版本为准。
-
-私有服务直接依赖本核心包，不维护第二份核心源码。当前版本不提供网站服务端。
+本仓库展示并提供两部分：可迁移到你自己的 Coding Agent 中使用的 **video-report Skill**，以及自动完成视频下载、转写和报告生成的 **pipeline**。
 
 ## 快速开始：在自己的 Coding Agent 中生成报告
 
@@ -32,7 +24,7 @@ ASR 负责把语音转成文字，Coding Agent 中的模型负责阅读、整理
 
 ### 2. 获取 Skill 和模板
 
-下载仓库，或只取出 [`src/video_report_agent/skills/video-report/`](src/video_report_agent/skills/video-report/) 整个目录。保留 `SKILL.md`、`assets/` 与 `references/` 的相对位置，不能只复制提示词而漏掉模板和编辑规则。
+通过仓库页面的 **Code → Download ZIP** 下载并解压，或执行 `git clone https://github.com/imexlovery/video-report-agent.git`。从中复制 [`src/video_report_agent/skills/video-report/`](src/video_report_agent/skills/video-report/) 整个目录。保留 `SKILL.md`、`assets/` 与 `references/` 的相对位置，不能只复制提示词而漏掉模板和编辑规则。
 
 在自己的工作目录中放置：
 
@@ -71,7 +63,7 @@ my-report/
 
 ## 效果展示
 
-**在线服务主页展示（服务端不包含在本仓库）**
+**在线网站预览**
 
 ![Web 前端主页默认状态](docs/images/web-home.png)
 
@@ -85,11 +77,18 @@ my-report/
 
 在 GitHub 中，HTML 链接打开文件页面；下载后用浏览器打开即可阅读。示例文件随仓库提供，无需启动本地服务。
 
-## 可选：运行公开核心 CLI
+## 可选：运行 pipeline
 
 使用 CLI 自动下载、转写并生成报告；无需网站服务。
 
 > Bilibili URL → yt-dlp → FFmpeg → ASR → Canonical Transcript → Pi RPC + Skill → report.html
+
+克隆仓库并进入目录（已下载则直接进入对应目录）：
+
+```sh
+git clone https://github.com/imexlovery/video-report-agent.git
+cd video-report-agent
+```
 
 ### 环境与安装
 
@@ -116,7 +115,7 @@ uv sync
 uv run playwright install chromium
 ```
 
-将 `.env.example` 复制为 `.env`，设置报告模型：
+首次安装时将 `.env.example` 复制为 `.env`；已有文件应保留，仅修改所需配置。设置报告模型：
 
 ```dotenv
 PI_PROVIDER=deepseek
@@ -151,7 +150,7 @@ DASHSCOPE_API_KEY=your-dashscope-api-key
 uv run video-report generate 'https://www.bilibili.com/video/BV...' --transcript-mode asr-only
 ```
 
-产物保存在 `runs/<run-id>/`，包括 `transcript.md`、来源记录和 `report.html`。流水线还通过 Chromium 导出报告长图 `report.png`。
+产物保存在 `runs/<run-id>/`，包括 `transcript.md`、来源记录和 `report.html`。流水线还会尝试通过 Chromium 导出报告长图 `report.png`。导出失败时 HTML 仍可标记为 `RENDERED`，需检查 `status.json` 中的 `image_error`，不能仅凭完成状态判断 PNG 已生成。
 
 ## 项目行为与边界
 
@@ -173,7 +172,7 @@ uv lock --check
 
 ## 核心包配置
 
-在项目运行目录读取 `.env`，Pi 状态保存在该目录的 `config/pi/`，不会写入安装包目录。首次生成会从包内模板初始化 `models.json`，已有配置不覆盖。可用 `PI_CODING_AGENT_DIR` 环境变量指定其他目录。
+CLI 在项目运行目录读取 `.env`，已有进程环境变量优先；Pi 状态保存在该目录的 `config/pi/`，不会写入安装包目录。首次生成会从包内模板初始化 `models.json`，已有配置不覆盖。可用 `PI_CODING_AGENT_DIR` 环境变量指定其他目录。
 
 默认使用包内共享 Skill；调用方可以通过 `PiRunner(skill_dir=...)` 或 worker 环境变量 `VIDEO_REPORT_SKILL_DIR` 选择完整 Skill 目录。
 

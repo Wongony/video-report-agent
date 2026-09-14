@@ -1,20 +1,12 @@
 # Video Report Agent
 
-线上网站 👉 [vreport.tri4t.xyz](https://vreport.tri4t.xyz)
+Hosted website 👉 [vreport.tri4t.xyz](https://vreport.tri4t.xyz)
 
 [简体中文](README.zh-CN.md) | English
 
-Turn video transcripts into self-contained HTML reading reports. **Use ASR + the video-report Skill in your own Coding Agent, without deploying this project.**
+Turn videos into self-contained HTML reading reports. **[Try the website](https://vreport.tri4t.xyz)** to generate and read reports online.
 
-The developer runs MLX Whisper locally on an Apple Silicon Mac. That is the developer's setup: Windows users can choose an ASR model compatible with their own hardware or use a speech-to-text API, then pass the transcript to the Skill.
-
-## Public Core / Hosted Proprietary Extensions
-
-This repository contains the public Agent Core and is the project showcase. **[Try the hosted Video Report](https://vreport.tri4t.xyz)**.
-
-Public components include ASR, Canonical Transcript, the Pi agent harness, tools, the shared Skill, report rendering, CLI, synthetic smoke evals, and tests. Accounts, credits, access control, production queues, administration, analytics, and deployment belong to a separate private service. See the live site for currently available features.
-
-The hosted service contains proprietary production components not included in this repository. It depends on this core package rather than maintaining a second copy. The current version does not include the website server.
+This repository provides the **video-report Skill** for use in your own Coding Agent, and a **pipeline** that automates video downloading, transcription, and report generation.
 
 ## Quick start: use your own Coding Agent
 
@@ -32,7 +24,7 @@ ASR converts speech to text. Your Coding Agent's model reads that text and creat
 
 ### 2. Get the Skill and template
 
-Download the repository, or copy just the complete [`src/video_report_agent/skills/video-report/`](src/video_report_agent/skills/video-report/) directory. Keep `SKILL.md`, `assets/`, and `references/` together with their relative paths intact.
+Download this repository using **Code → Download ZIP** and extract it, or clone it with `git clone https://github.com/imexlovery/video-report-agent.git`. Copy the complete [`src/video_report_agent/skills/video-report/`](src/video_report_agent/skills/video-report/) directory. Keep `SKILL.md`, `assets/`, and `references/` together with their relative paths intact.
 
 Arrange your working folder as follows:
 
@@ -71,7 +63,7 @@ Open `output/report.html` in a browser. The Skill guides content organization, s
 
 ## Preview
 
-**Hosted website preview (server not included)**
+**Website preview**
 
 ![Web homepage in its default state](docs/images/web-home.png)
 
@@ -85,11 +77,18 @@ The image below shows the top of the report. Follow the links for the complete r
 
 On GitHub, the HTML link opens the file page; download it and open it in a browser to read. The example files are included in the repository and do not require a running local service.
 
-## Optional: run the public core CLI
+## Optional: run the pipeline
 
 Use the CLI to automate downloading, transcription, and report generation without a website server.
 
 > Bilibili URL → yt-dlp → FFmpeg → ASR → Canonical Transcript → Pi RPC + Skill → report.html
+
+Clone the repository and enter its directory (skip cloning if already downloaded):
+
+```sh
+git clone https://github.com/imexlovery/video-report-agent.git
+cd video-report-agent
+```
 
 ### Requirements and installation
 
@@ -116,7 +115,7 @@ uv sync
 uv run playwright install chromium
 ```
 
-Copy `.env.example` to `.env` and configure the report model:
+For a new setup, copy `.env.example` to `.env`; preserve an existing `.env`. Configure the report model:
 
 ```dotenv
 PI_PROVIDER=deepseek
@@ -151,7 +150,7 @@ The `paraformer` backend supports `paraformer-v1`, `paraformer-v2`, and the Fun-
 uv run video-report generate 'https://www.bilibili.com/video/BV...' --transcript-mode asr-only
 ```
 
-Outputs are saved in `runs/<run-id>/`, including `transcript.md`, provenance records, and `report.html`. The pipeline also exports a Chromium-generated full-page screenshot, `report.png`.
+Outputs are saved in `runs/<run-id>/`, including `transcript.md`, provenance records, and `report.html`. The pipeline also attempts to export `report.png` using Chromium. If export fails, the HTML can still be marked `RENDERED`; inspect `image_error` in `status.json` before assuming the PNG exists.
 
 ## Project behavior and boundaries
 
@@ -173,7 +172,7 @@ See [`video-report/SKILL.md`](src/video_report_agent/skills/video-report/SKILL.m
 
 ## Core package configuration
 
-The CLI reads `.env` from the working directory. Pi state lives in `config/pi/` there, never in the installed package. The first generation initializes `models.json` from packaged defaults without replacing existing settings. Set `PI_CODING_AGENT_DIR` in the process environment to choose another directory.
+The CLI reads `.env` from the working directory; existing process environment variables take precedence. Pi state lives in `config/pi/` there, never in the installed package. The first generation initializes `models.json` from packaged defaults without replacing existing settings. Set `PI_CODING_AGENT_DIR` in the process environment to choose another directory.
 
 The packaged Skill is the default. Callers can select a complete Skill directory with `PiRunner(skill_dir=...)` or the worker environment variable `VIDEO_REPORT_SKILL_DIR`.
 
