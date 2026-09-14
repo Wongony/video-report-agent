@@ -167,8 +167,7 @@ def generate(run: Path) -> dict:
             render_report_image(run)
         except Exception as exc:
             status["image_error"] = str(exc)
-        update("RENDERED", report_url=f"/reports/{run.name}/report.html",
-               image_url=f"/reports/{run.name}/report.png")
+        update("RENDERED")
     except Exception as exc:
         if isinstance(exc, CloudAsrError):
             write_json(run / "asr-error.json", exc.to_dict())

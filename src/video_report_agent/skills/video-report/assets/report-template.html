@@ -6,11 +6,12 @@
 <title>{{TITLE}}</title>
 <style>
 /* 稳定视觉语言；组件按内容关系选择，不设配额。 */
-:root{color-scheme:light;--paper:#fff;--canvas:#fff;--ink:#414b55;--heading:#242d35;--muted:#65717d;--accent:#c8562e;--orange:#ff8658;--line:#e9edf0;--blue:#23658b;--blue-wash:#edf7ff;--wash:#fff8e8}
+:root{color-scheme:light;--paper:#fff;--canvas:#f2f5f7;--ink:#414b55;--heading:#242d35;--muted:#65717d;--accent:#c8562e;--orange:#ff8658;--line:#e9edf0;--blue:#23658b;--blue-wash:#edf7ff;--wash:#fff8e8}
 *{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:17px;line-height:1.85;-webkit-font-smoothing:antialiased}
 ::selection{background:#ffddc8;color:var(--heading)}.paper{max-width:860px;margin:24px auto;padding:48px 46px 30px;background:var(--paper);border-radius:8px;box-shadow:0 8px 30px #25384b0b;position:relative}.paper:before{content:"";position:absolute;inset:0 0 auto;height:4px;border-radius:8px 8px 0 0;background:linear-gradient(90deg,#ff9d64,#a9a6ba)}.paper:after{content:"";display:block;margin-top:20px;height:3px;background:linear-gradient(90deg,#ff9d64,#a9a6ba)}
 h1,h2,h3,p{margin:0}h1,h2,h3{color:var(--heading);text-wrap:pretty}h1{font-size:34px;line-height:1.45;font-weight:750;letter-spacing:0}.subtitle{text-wrap:balance;font-size:21px;font-weight:600;line-height:1.6;margin-top:12px;color:#4c5965}.lead{margin-top:20px;line-height:1.9}.meta{font-size:12px;color:var(--muted);margin-top:18px;line-height:1.8}
-section{margin-top:42px}section>h2{display:flex;align-items:baseline;gap:12px;font-size:24px;font-weight:750;line-height:1.55;padding-bottom:13px;border-bottom:1px solid var(--line);margin-bottom:21px}.num{display:inline-flex;align-items:center;justify-content:center;align-self:flex-start;flex-shrink:0;min-width:28px;height:28px;padding:0 5px;margin-top:5px;background:#424e58;border-radius:50%;color:white;font-size:16px;line-height:1;font-weight:650;font-variant-numeric:tabular-nums}h3{font-size:19px;font-weight:700;line-height:1.6;margin:27px 0 12px}h3:before{content:"";display:inline-block;width:8px;height:8px;margin-right:9px;margin-bottom:2px;border-radius:50%;background:var(--dot,var(--orange))}p+p{margin-top:14px}strong{font-weight:650;color:var(--heading)}ul,ol{padding-left:1.4em;margin:16px 0}li+li{margin-top:8px}li::marker{color:var(--accent)}a{color:var(--blue);text-underline-offset:4px}a:hover{color:var(--accent)}:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+section{margin-top:42px}section>h2{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px;font-size:24px;font-weight:750;line-height:1.55;padding-bottom:13px;border-bottom:1px solid var(--line);margin-bottom:21px}.num{display:inline-flex;align-items:center;justify-content:center;align-self:flex-start;flex-shrink:0;min-width:28px;height:28px;padding:0 5px;margin-top:5px;background:#424e58;border-radius:50%;color:white;font-size:16px;line-height:1;font-weight:650;font-variant-numeric:tabular-nums}h3{font-size:19px;font-weight:700;line-height:1.6;margin:27px 0 12px}h3:before{content:"";display:inline-block;width:8px;height:8px;margin-right:9px;margin-bottom:2px;border-radius:50%;background:var(--dot,var(--orange))}p+p{margin-top:14px}strong{font-weight:650;color:var(--heading)}ul,ol{padding-left:1.4em;margin:16px 0}li+li{margin-top:8px}li::marker{color:var(--accent)}a{color:var(--blue);text-underline-offset:4px}a:hover{color:var(--accent)}:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.section-title{flex:1 1 16em;min-width:0}.section-time{display:block;flex:0 1 auto;max-width:calc(100% - 40px);margin-left:auto;font-size:12px;font-weight:400;line-height:1.6;color:#666666;font-variant-numeric:tabular-nums;overflow-wrap:normal}
 .callout{margin:25px 0;padding:20px 24px;background:var(--blue-wash);border:1px solid #d2e8f8;border-left:4px solid #6db6e9;border-radius:7px;color:var(--blue)}.callout h3{margin:0 0 9px;color:var(--blue);font-size:18px}.callout h3:before{display:none}.callout strong{color:inherit}.keyline{margin:25px 0;padding:20px 24px;background:var(--wash);border-left:4px solid #f4c975;border-radius:6px;line-height:1.85}.keyline p,.keyline blockquote{margin:0}.keyline cite{display:block;font-size:13px;font-style:normal;margin-top:10px;color:var(--muted)}
 .cards,.comparison,.categories{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;margin:26px 0}.card,.comparison>div,.category{min-width:0;padding:22px 24px;background:#fff;border-radius:9px;box-shadow:0 4px 16px #25384b12}.card h3,.comparison h3,.category h3{margin:0 0 11px;font-size:18px}.card p,.category p,.comparison p{font-size:16px;line-height:1.85}.categories{grid-template-columns:repeat(auto-fit,minmax(195px,1fr))}.category{border-top:3px solid var(--line);padding:18px 20px}.category ul{padding-left:1.2em}
 .steps{list-style:none;counter-reset:step;padding:0;margin:24px 0}.steps>li{counter-increment:step;position:relative;padding-left:38px;margin:23px 0}.steps>li:before{content:counter(step);position:absolute;left:0;top:3px;width:25px;height:25px;border-radius:50%;background:var(--accent);color:white;text-align:center;line-height:25px;font-size:14px;font-weight:650}.steps h3{margin:0 0 7px}.steps h3:before{display:none}
@@ -25,14 +26,14 @@ footer{display:flex;align-items:baseline;justify-content:space-between;gap:16px;
 <body><main class="paper">
 <header class="intro">
 <h1>{{TITLE}}</h1>
-<!-- 副标题可删除。题头不要放组件配额、虚构指标或装饰标签。ATTRIBUTION 仅使用已有的平台、作者与可点击原视频标题，URL 放入 href，不重列推广标签；完整原始标题放页尾。 -->
+<!-- 副标题与导语无新增内容时连同对应元素删除。题头不要放组件配额、虚构指标或装饰标签。ATTRIBUTION 仅使用已有的平台、作者与可点击原视频标题，URL 放入 href，不重列推广标签；完整原始标题放页尾。 -->
 <p class="subtitle">{{SUBTITLE}}</p>
 <p class="lead">{{LEAD}}</p>
 <p class="meta">{{ATTRIBUTION}}</p>
 </header>
 <!-- 独立使用：没有简介时删除此占位符，提供简介时按 Skill 填入原文折叠块。仅产品调用明确要求后处理时原样保留一次。 -->
 {{VIDEO_DESCRIPTION}}
-<!-- 分层阅读按新增价值选用：快速掌握只留核心判断与必要限定；内容地图仅在能增加关系时保留，否则与摘要合并，长文可用紧凑导航。两者用 <section><h2>自然中文标题</h2>，不放 span.num、星号或“速／图”标记；正文从 1 连续编号、正常展开。Profile 不进入可见页面。 -->
+<!-- 默认直接进入内容，按有效信息量、关系复杂度和用户用途选择详略，时长仅为提示。短内容不设摘要与地图；主图、对照或步骤直接承担正文。长文可加紧凑导航；概览仅在有独立用途时出现，使用无编号自然中文标题，不放 span.num。多个正文大章节从 1 连续编号；单一单元或紧凑模块可省略编号。易读表达就地解释术语，精读保留必要依据，均不缩小字号或重复扩写。Profile 不进入可见页面。 -->
 <!-- 共用视觉语法，所有 Profile 均可使用；以下为可选结构指引，不是待填的固定章节：
 Timeline / Turning Points：ol > li 按事件排列，每项写事件或阶段、变化与后果；转折可用 strong 标识。事件日期属于内容，不重复视频定位时间戳。
 Before → Trigger → After：使用 comparison 对照同一对象前后状态，以邻近短段或过程链说明触发事件；不能用布局暗示来源未支持的因果。
@@ -42,8 +43,14 @@ Decision Tree：嵌套 ul/li 在分支开头写明条件，再写动作与结果
 State / Relationship Map：使用 HTML/CSS 或内联 SVG 呈现带名称的对象和状态，连接标注作用及方向，必要条件紧邻关系；推测或类比明确标识。关系链用明确的网格或 SVG 定位，横向放不下时采用纵向或明确连接的分行结构，不让箭头与节点随 flex-wrap 自由折行；回路画出返回目标和方向，不只在图下用文字说明。
 颜色按对象角色或关系性质使用，不按卡片奇偶或节点顺序轮换；同图的已有状态用实线、预计变化用虚线并就地标注其性质。
 这些结构直接承担内容；复用现有样式，不依赖外部脚本或图库，不要求每份报告使用全部语法。 -->
-<!-- 正文从语义组织生成：section/h2（span.num 放连续章节序号，后接 span 标题文本）、h3/p；可选 callout、keyline、cards/card、comparison、categories/category、ol.steps/li、stats、tiles/tile、bars/bar。不存在必填章节或必用组件。柱图按 div.bars > div.bar 组织，每个 bar 为 div.bar-head（span.bar-name + span.bar-value）加 span.bar-track>span.bar-fill；bar-fill 的 width 即占比，bar-track 占满整行宽度，同组共用刻度（最大项给 width:100%）。短项目用原生列表、表格或紧凑分栏，名称与数值同行；ol.steps 仅供需要展开解释的步骤选用，圆圈编号与布局可自行调整。p、li 或卡片用 data-source-units 绑定实际支持内容的 ID。 -->
+<!-- 正文从语义组织生成：section/h2（多个大章节时用 span.num 放连续序号，后接 span 标题文本）、h3/p；可选 callout、keyline、cards/card、comparison、categories/category、ol.steps/li、stats、tiles/tile、bars/bar。不存在必填章节或必用组件。柱图按 div.bars > div.bar 组织，每个 bar 为 div.bar-head（span.bar-name + span.bar-value）加 span.bar-track>span.bar-fill；bar-fill 的 width 即占比，bar-track 占满整行宽度，同组共用刻度（最大项给 width:100%）。短项目用原生列表、表格或紧凑分栏，名称与数值同行；ol.steps 仅供需要展开解释的步骤选用，圆圈编号与布局可自行调整。p、li 或卡片用 data-source-units 绑定实际支持内容的 ID。 -->
+<!-- 章节标题复用下列结构与样式，不另写时间字号；长标题正常换行，空间不足时将时间移到下一行右侧。
+<section>
+<h2><span class="num">1</span><span class="section-title">章节标题</span><span class="section-time">02:15–08:40</span></h2>
+<p>章节正文</p>
+</section>
+无可靠时间时省略 section-time；一小时以上全文使用 HH:MM:SS，不连续区间以中文分号分隔并允许自然换行。 -->
 {{BODY}}
 <details><summary>来源与处理说明</summary>{{SOURCES}}</details>
-<footer><span>精读 · 本地阅读报告</span><span>vreport.tri4t.xyz</span></footer>
+<footer><span>视频 · 本地阅读报告</span><span>vreport.tri4t.xyz</span></footer>
 </main></body></html>

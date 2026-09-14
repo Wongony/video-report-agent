@@ -24,3 +24,11 @@ config/pi/*
 
 # WorkBuddy agent workspace (local tool state: memory logs, tmp scratch files)
 .workbuddy/
+
+/.local/
+
+/.impeccable/
+
+# Real-source evaluation data belongs in the private service repository
+/evals/asr/
+/evals/private/

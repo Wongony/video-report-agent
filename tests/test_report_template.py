@@ -22,9 +22,15 @@ def test_footer_keeps_report_label_left_and_domain_right():
 
     assert "footer{display:flex;align-items:baseline;justify-content:space-between;" in template
     assert (
-        "<footer><span>精读 · 本地阅读报告</span>"
+        "<footer><span>视频 · 本地阅读报告</span>"
         "<span>vreport.tri4t.xyz</span></footer>"
     ) in template
+
+
+def test_template_keeps_paper_white_and_canvas_light_gray():
+    template = TEMPLATE.read_text()
+
+    assert "--paper:#fff;--canvas:#f2f5f7;" in template
 
 
 def test_bar_component_pins_block_display_on_fill():

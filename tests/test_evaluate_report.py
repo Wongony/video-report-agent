@@ -5,7 +5,7 @@ from pathlib import Path
 from video_report_agent.evaluate_report import evaluate
 
 
-def test_fixed_cases_have_real_source_anchors():
+def test_synthetic_smoke_cases_have_source_anchors():
     root = Path(__file__).parents[1] / "evals/report-review"
     cases = json.loads((root / "manifest.json").read_text())["cases"]
     assert len(cases) == 3

@@ -12,9 +12,9 @@
 
 本仓库是公开 Agent Core 和项目展示入口。在线体验：**[Video Report](https://vreport.tri4t.xyz)**。
 
-公开部分包含 ASR、Canonical Transcript、Pi Agent 调用、工具、基础 Skill、报告渲染、CLI、评测与测试。在线服务的账户、额度、访问控制、生产队列、管理后台、统计、生产 Skill 和部署配置由独立私有仓库维护，不包含在本仓库中。网站当前可用功能以在线版本为准。
+公开部分包含 ASR、Canonical Transcript、Pi Agent 调用、工具、共享 Skill、报告渲染、CLI、合成 smoke eval 与测试。在线服务的账户、额度、访问控制、生产队列、管理后台、统计 和部署配置由独立私有仓库维护，不包含在本仓库中。网站当前可用功能以在线版本为准。
 
-私有服务直接依赖本核心包，不维护第二份核心源码。旧版完整应用保留在 Git 历史中；当前版本不再提供网站服务端。
+私有服务直接依赖本核心包，不维护第二份核心源码。当前版本不提供网站服务端。
 
 ## 快速开始：在自己的 Coding Agent 中生成报告
 
@@ -95,6 +95,13 @@ my-report/
 
 需要 Python 3.12、uv、已加入 `PATH` 的 `ffmpeg` / `ffprobe`，以及 Pi 0.85.0 和报告模型凭证。`uv sync` 不会安装 Pi。以下命令在仓库根目录执行。
 
+先安装 Node.js 22（含 npm），再安装固定版本的 Pi，并确认命令可用：
+
+```sh
+npm install -g @earendil-works/pi-coding-agent@0.85.0
+pi --version
+```
+
 Apple Silicon 使用本地 MLX：
 
 ```sh
@@ -134,7 +141,7 @@ ASR_MODEL=paraformer-v2
 DASHSCOPE_API_KEY=your-dashscope-api-key
 ```
 
-`paraformer` 后端支持 `paraformer-v1`、`paraformer-v2` 及代码中已适配的 Fun-ASR 文件转写模型。修改环境配置后需重启本地服务。云端 ASR 会上传音频，报告模型会接收用于报告生成的转写内容。
+`paraformer` 后端支持 `paraformer-v1`、`paraformer-v2` 及代码中已适配的 Fun-ASR 文件转写模型。修改 `.env` 后，下次运行 CLI 命令时生效。云端 ASR 会上传音频，报告模型会接收用于报告生成的转写内容。
 
 **独立使用 Skill 时，可以自由选择外部 ASR；接入本项目流水线时，目前仅内置 `mlx` 和 `paraformer` 后端。** 其他本地模型或 API 需要新增相应适配，不能仅修改模型名称就直接使用。Windows 用户可以先按前面的 Skill 路径生成报告；本文不将完整项目的 Windows 原生运行视为已验证能力。
 
@@ -168,4 +175,6 @@ uv lock --check
 
 在项目运行目录读取 `.env`，Pi 状态保存在该目录的 `config/pi/`，不会写入安装包目录。首次生成会从包内模板初始化 `models.json`，已有配置不覆盖。可用 `PI_CODING_AGENT_DIR` 环境变量指定其他目录。
 
-默认使用包内基础 Skill；调用方可以通过 `PiRunner(skill_dir=...)` 或 worker 环境变量 `VIDEO_REPORT_SKILL_DIR` 选择完整 Skill 目录。
+默认使用包内共享 Skill；调用方可以通过 `PiRunner(skill_dir=...)` 或 worker 环境变量 `VIDEO_REPORT_SKILL_DIR` 选择完整 Skill 目录。
+
+公开合成 smoke 样例及可选真实模型调用说明见 [evals/report-review](evals/report-review/README.md)。

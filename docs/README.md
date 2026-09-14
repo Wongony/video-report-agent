@@ -4,4 +4,4 @@ See [the project README](../README.md) for the public core CLI and hosted servic
 
 - [Example HTML report](examples/report.html)
 - [Full report image](examples/report.png)
-- [Report benchmark inputs](../evals/report-review/manifest.json)
+- [Synthetic smoke eval](../evals/report-review/README.md)

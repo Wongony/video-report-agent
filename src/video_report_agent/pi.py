@@ -19,6 +19,12 @@ DEFAULT_MODEL = "deepseek-flash"
 DEFAULT_THINKING = "low"
 
 
+def initialize_pi_config(directory: Path) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    if not (directory / "models.json").exists():
+        shutil.copy2(Path(__file__).with_name("defaults") / "models.json", directory / "models.json")
+
+
 class PiError(RuntimeError):
     def __init__(self, category: str, message: str):
         self.category = category
@@ -60,11 +66,7 @@ class PiRunner:
         executable = shutil.which("pi")
         if executable is None:
             raise PiError("ENVIRONMENT_FAILURE", "pi is not installed")
-        PI_AGENT_DIR.mkdir(parents=True, exist_ok=True)
-        if not (PI_AGENT_DIR / "models.json").exists():
-            shutil.copy2(
-                Path(__file__).with_name("defaults") / "models.json", PI_AGENT_DIR / "models.json",
-            )
+        initialize_pi_config(PI_AGENT_DIR)
         env = os.environ.copy()
         env["PI_CODING_AGENT_DIR"] = str(PI_AGENT_DIR)
         env["VIDEO_REPORT_PYTHON"] = sys.executable
