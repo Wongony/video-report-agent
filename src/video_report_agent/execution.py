@@ -27,10 +27,21 @@ def generate(run: Path, *, timeout=RUN_TIMEOUT_SECONDS, env: dict[str, str] | No
             env={**os.environ, **env} if env is not None else None,
         )
         timed_out = False
+        cancelled = False
+        deadline = time.monotonic() + timeout
         try:
-            process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            timed_out = True
+            while process.poll() is None:
+                if (run / "cancel.requested").exists():
+                    cancelled = True
+                    break
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    timed_out = True
+                    break
+                try:
+                    process.wait(timeout=min(0.1, remaining))
+                except subprocess.TimeoutExpired:
+                    pass
         finally:
             # The worker and yt-dlp/FFmpeg/Pi/browser children share this process group.
             # Kill before writing FAILED so a surviving worker cannot overwrite it.
@@ -41,7 +52,10 @@ def generate(run: Path, *, timeout=RUN_TIMEOUT_SECONDS, env: dict[str, str] | No
             process.wait()
     path = run / "status.json"
     status = json.loads(path.read_text())
-    if timed_out or process.returncode or status.get("state") not in {"RENDERED", "FAILED"}:
+    if cancelled:
+        status.update(state="CANCELLED", stage="CANCELLED", finished_at=time.time())
+        write_json(path, status)
+    elif timed_out or process.returncode or status.get("state") not in {"RENDERED", "FAILED"}:
         status.update(
             state="FAILED", stage="FAILED", finished_at=time.time(),
             error_category="EXECUTION_TIMEOUT" if timed_out else "EXECUTION_FAILURE",
