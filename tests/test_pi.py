@@ -76,7 +76,12 @@ def test_settled_after_retry_uses_final_message(tmp_path):
         {"type": "agent_settled"},
     ]
     asyncio.run(PiRunner()._consume(Process(events), tmp_path, "task"))
-    assert len((tmp_path / "pi.events.jsonl").read_text().splitlines()) == 4
+    recorded = [
+        json.loads(line) for line in (tmp_path / "pi.events.jsonl").read_text().splitlines()
+    ]
+    assert len(recorded) == 4
+    assert all(isinstance(event.pop("_trace_received_at"), float) for event in recorded)
+    assert recorded == events
 
 
 def test_rejected_prompt(tmp_path):

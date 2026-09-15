@@ -68,7 +68,10 @@ def test_pipeline_reuses_inputs_and_generates_new_report(completed, monkeypatch)
         assert "hello" in (current / "transcript.md").read_text()
         (current / "report.html").write_text("fresh report")
 
-    monkeypatch.setattr(pipeline, "PiRunner", lambda: SimpleNamespace(run=generate_report))
+    monkeypatch.setattr(
+        pipeline, "PiRunner",
+        lambda: SimpleNamespace(run=generate_report, provider="test", model="test"),
+    )
     status = pipeline.generate(run)
     assert status["state"] == "RENDERED"
     assert "report_url" not in status
@@ -146,7 +149,7 @@ def test_download_only_hit_still_transcribes(completed, monkeypatch):
 
     def transcribe(*args, **kwargs):
         calls.append("asr")
-        return SimpleNamespace(to_dict=lambda: {})
+        return SimpleNamespace(to_dict=lambda: {}, segments=[])
 
     def build(*args, **kwargs):
         calls.append("canonical")
@@ -162,7 +165,10 @@ def test_download_only_hit_still_transcribes(completed, monkeypatch):
     monkeypatch.setattr(pipeline, "extract_audio", extract)
     monkeypatch.setattr(pipeline, "transcribe_audio", transcribe)
     monkeypatch.setattr(pipeline, "build_transcript", build)
-    monkeypatch.setattr(pipeline, "PiRunner", lambda: SimpleNamespace(run=report))
+    monkeypatch.setattr(
+        pipeline, "PiRunner",
+        lambda: SimpleNamespace(run=report, provider="test", model="test"),
+    )
     status = pipeline.generate(run)
     assert status["state"] == "RENDERED"
     assert status["download_reused_from"] == previous.name

@@ -20,6 +20,7 @@ from .pi import PiError, PiRunner
 from .report_image import render_report_image
 from .retention import cleanup_media
 from .reuse import reuse_download, reuse_transcript
+from .trace import RunTrace
 from .transcript import build_transcript
 from .transcript_foundation import parse_roi
 
@@ -95,24 +96,27 @@ def generate(run: Path) -> dict:
         status.update(state=stage, stage=stage, **fields)
         write_json(run / "status.json", status)
 
+    trace = RunTrace(run)
     try:
         update("DOWNLOADING")
-        source = validate_bilibili_url(metadata["url"])
-        request_subtitles = metadata.get("transcript_mode") == "fused"
-        audio_only = metadata.get("transcript_mode", "asr-only") == "asr-only"
-        downloaded, download_source = reuse_download(
-            source,
-            run,
-            request_subtitles=request_subtitles,
-            audio_only=audio_only,
-        )
-        if downloaded is None:
-            downloaded = download_bilibili_video(
+        with trace.span("download", input={"video_id": metadata["video_id"]}) as detail:
+            source = validate_bilibili_url(metadata["url"])
+            request_subtitles = metadata.get("transcript_mode") == "fused"
+            audio_only = metadata.get("transcript_mode", "asr-only") == "asr-only"
+            downloaded, download_source = reuse_download(
                 source,
                 run,
                 request_subtitles=request_subtitles,
                 audio_only=audio_only,
             )
+            if downloaded is None:
+                downloaded = download_bilibili_video(
+                    source,
+                    run,
+                    request_subtitles=request_subtitles,
+                    audio_only=audio_only,
+                )
+            detail.update(output={"media": downloaded.media_path.name}, reused_from=download_source)
         status["download_reused_from"] = download_source
         metadata.update(
             download_audio_only=audio_only,
@@ -126,45 +130,68 @@ def generate(run: Path) -> dict:
         status["transcript_reused_from"] = transcript_source
         if transcript_source is None:
             update("TRANSCRIBING")
-            audio = extract_audio(downloaded.media_path, run / "audio.wav")
-            asr = transcribe_audio(
-                audio.path,
-                model=metadata["asr_model"],
-                backend=metadata["asr_backend"],
-                base_url=metadata["asr_base_url"],
-                language=metadata["asr_language"],
-                parameters=metadata["asr_parameters"],
-                task_path=run / "asr-task.json",
-            )
-            write_json(run / "asr.json", asr.to_dict())
-            options = argparse.Namespace(
-                transcript_mode=metadata.get("transcript_mode", "asr-only"),
-                ocr_mode=metadata.get("ocr_mode", "off"),
-                ocr_roi=metadata.get("ocr_roi"),
-                ocr_backend=metadata["ocr_backend"],
-                subtitle_file=(
-                    run / metadata["subtitle_file"] if metadata.get("subtitle_file") else None
-                ),
-            )
-            build, _, _ = build_transcript(
-                options,
-                source_path=downloaded.media_path,
-                artifact_root=run,
-                asr_path=run / "asr.json",
-                source_duration_ms=audio.probe.duration_ms,
-                manifest=metadata,
-            )
-            transcript = [f"# {downloaded.title}", downloaded.attribution, ""]
-            transcript.extend(
-                f"[{u.unit_id} | {u.start_ms / 1000:.3f}–{u.end_ms / 1000:.3f}s] {u.canonical_text}"
-                for u in build.canonical_units
-            )
-            (run / "transcript.md").write_text("\n".join(transcript))
+            with trace.span("ffmpeg", input={"media": downloaded.media_path.name}) as detail:
+                audio = extract_audio(downloaded.media_path, run / "audio.wav")
+                detail.update(output={
+                    "audio": audio.path.name, "duration_ms": audio.probe.duration_ms,
+                })
+            with trace.span(
+                "asr", backend=metadata["asr_backend"], model=metadata["asr_model"],
+                input={"audio": audio.path.name},
+            ) as detail:
+                asr = transcribe_audio(
+                    audio.path,
+                    model=metadata["asr_model"],
+                    backend=metadata["asr_backend"],
+                    base_url=metadata["asr_base_url"],
+                    language=metadata["asr_language"],
+                    parameters=metadata["asr_parameters"],
+                    task_path=run / "asr-task.json",
+                )
+                write_json(run / "asr.json", asr.to_dict())
+                detail.update(output={"artifact": "asr.json", "segments": len(asr.segments)})
+            with trace.span("transcript") as detail:
+                options = argparse.Namespace(
+                    transcript_mode=metadata.get("transcript_mode", "asr-only"),
+                    ocr_mode=metadata.get("ocr_mode", "off"),
+                    ocr_roi=metadata.get("ocr_roi"),
+                    ocr_backend=metadata["ocr_backend"],
+                    subtitle_file=(
+                        run / metadata["subtitle_file"] if metadata.get("subtitle_file") else None
+                    ),
+                )
+                build, _, _ = build_transcript(
+                    options,
+                    source_path=downloaded.media_path,
+                    artifact_root=run,
+                    asr_path=run / "asr.json",
+                    source_duration_ms=audio.probe.duration_ms,
+                    manifest=metadata,
+                )
+                transcript = [f"# {downloaded.title}", downloaded.attribution, ""]
+                transcript.extend(
+                    f"[{u.unit_id} | {u.start_ms / 1000:.3f}–{u.end_ms / 1000:.3f}s] "
+                    f"{u.canonical_text}"
+                    for u in build.canonical_units
+                )
+                (run / "transcript.md").write_text("\n".join(transcript))
+                detail.update(output={
+                    "artifact": "transcript.md", "units": len(build.canonical_units),
+                })
+        else:
+            with trace.span("transcript") as detail:
+                detail.update(reused_from=transcript_source, output={"artifact": "transcript.md"})
         update("GENERATING")
-        asyncio.run(PiRunner(**metadata.get("model_selection", {})).run(run))
+        runner = PiRunner(**metadata.get("model_selection", {}))
+        with trace.span("agent", backend=runner.provider, model=runner.model,
+                        input={"artifact": "transcript.md"}) as detail:
+            asyncio.run(runner.run(run))
+            detail.update(output={"artifact": "report.html"})
         update("GENERATING_IMAGE")
         try:
-            render_report_image(run)
+            with trace.span("render", input={"artifact": "report.html"}) as detail:
+                render_report_image(run)
+                detail.update(output={"artifact": "report.png"})
         except Exception as exc:
             status["image_error"] = str(exc)
         update("RENDERED")

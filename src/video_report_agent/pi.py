@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 
 from .report_content import fill_video_description
@@ -181,9 +182,10 @@ class PiRunner:
         last_assistant = None
         with (workspace / "pi.events.jsonl").open("wb") as log:
             while line := await process.stdout.readline():
-                log.write(line)
-                log.flush()
                 event = json.loads(line)
+                event["_trace_received_at"] = time.time()
+                log.write((json.dumps(event, ensure_ascii=False) + "\n").encode())
+                log.flush()
                 if event.get("type") == "response" and event.get("success") is False:
                     raise PiError("ENVIRONMENT_FAILURE", event.get("error", "Pi rejected prompt"))
                 if event.get("type") == "message_end":
