@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from .pipeline import write_json
+from .trace import RunTrace
 
 RUN_TIMEOUT_SECONDS = 30 * 60
 
@@ -54,6 +55,7 @@ def generate(run: Path, *, timeout=RUN_TIMEOUT_SECONDS, env: dict[str, str] | No
     status = json.loads(path.read_text())
     if cancelled:
         status.update(state="CANCELLED", stage="CANCELLED", finished_at=time.time())
+        RunTrace(run).cancelled()
         write_json(path, status)
     elif timed_out or process.returncode or status.get("state") not in {"RENDERED", "FAILED"}:
         status.update(

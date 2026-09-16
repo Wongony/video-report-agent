@@ -25,6 +25,27 @@ class RunTrace:
         with self.path.open("a") as stream:
             stream.write(json.dumps(record, ensure_ascii=False) + "\n")
 
+    def cancelled(self):
+        """Close interrupted spans after the worker has stopped writing."""
+        active = {}
+        if self.path.exists():
+            for line in self.path.read_text().splitlines():
+                try:
+                    event = json.loads(line)
+                except ValueError:
+                    # A killed worker may leave its final line incomplete.
+                    continue
+                if event.get("type") == "stage_start":
+                    active[event["span_id"]] = event
+                elif event.get("type") == "stage_end":
+                    active.pop(event["span_id"], None)
+        now = time.time()
+        for span_id, event in active.items():
+            self.emit("stage_end", span_id, event["stage"], status="cancelled",
+                      elapsed_ms=round(max(0, now - event["timestamp"]) * 1000, 3),
+                      error={"type": "Cancelled", "message": "用户取消任务"})
+        self.emit("run_cancelled", "cancel", "cancellation")
+
     @contextmanager
     def span(self, stage, **fields):
         span_id = uuid4().hex
