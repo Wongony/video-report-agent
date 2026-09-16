@@ -19,7 +19,7 @@ from .paraformer import CloudAsrError
 from .pi import PiError, PiRunner
 from .report_image import render_report_image
 from .retention import cleanup_media
-from .reuse import reuse_download, reuse_transcript
+from .reuse import reuse_asr, reuse_download, reuse_transcript
 from .trace import RunTrace
 from .transcript import build_transcript
 from .transcript_foundation import parse_roi
@@ -139,17 +139,26 @@ def generate(run: Path) -> dict:
                 "asr", backend=metadata["asr_backend"], model=metadata["asr_model"],
                 input={"audio": audio.path.name},
             ) as detail:
-                asr = transcribe_audio(
-                    audio.path,
-                    model=metadata["asr_model"],
-                    backend=metadata["asr_backend"],
-                    base_url=metadata["asr_base_url"],
-                    language=metadata["asr_language"],
-                    parameters=metadata["asr_parameters"],
-                    task_path=run / "asr-task.json",
+                asr_source = reuse_asr(run, metadata)
+                status["asr_reused_from"] = asr_source
+                if asr_source is None:
+                    asr = transcribe_audio(
+                        audio.path,
+                        model=metadata["asr_model"],
+                        backend=metadata["asr_backend"],
+                        base_url=metadata["asr_base_url"],
+                        language=metadata["asr_language"],
+                        parameters=metadata["asr_parameters"],
+                        task_path=run / "asr-task.json",
+                    )
+                    write_json(run / "asr.json", asr.to_dict())
+                    segments = len(asr.segments)
+                else:
+                    segments = len(json.loads((run / "asr.json").read_text())["segments"])
+                detail.update(
+                    output={"artifact": "asr.json", "segments": segments},
+                    reused_from=asr_source,
                 )
-                write_json(run / "asr.json", asr.to_dict())
-                detail.update(output={"artifact": "asr.json", "segments": len(asr.segments)})
             with trace.span("transcript") as detail:
                 options = argparse.Namespace(
                     transcript_mode=metadata.get("transcript_mode", "asr-only"),

@@ -2,7 +2,9 @@ import json
 import os
 import time
 
-from video_report_agent.retention import cleanup_media
+from video_report_agent import pipeline
+from video_report_agent.retention import cleanup_cancelled_run, cleanup_media
+from video_report_agent.transcript_foundation import FUSION_VERSION, NORMALIZER_VERSION
 
 
 def make_run(root, name, state="RENDERED", age=0):
@@ -21,7 +23,7 @@ def make_run(root, name, state="RENDERED", age=0):
     return run
 
 
-def test_default_keeps_twenty_and_preserves_report_and_evidence(tmp_path, monkeypatch):
+def test_default_keeps_twenty_terminal_media_and_preserves_evidence(tmp_path, monkeypatch):
     monkeypatch.delenv("MEDIA_KEEP_LAST", raising=False)
     monkeypatch.delenv("MEDIA_MAX_AGE_DAYS", raising=False)
     runs = [make_run(tmp_path, str(i), age=i) for i in range(21)]
@@ -38,7 +40,7 @@ def test_default_keeps_twenty_and_preserves_report_and_evidence(tmp_path, monkey
         "download/source.zh.srt", "assets/image.png", "failure.log", "status.json",
     ):
         assert (old / name).exists()
-    assert (failed / "audio.wav").exists()
+    assert not (failed / "audio.wav").exists()
     assert (active / "audio.wav").exists()
     cleanup_media(tmp_path)  # Repeated cleanup is harmless.
 
@@ -55,3 +57,97 @@ def test_age_and_disabled_limits(tmp_path, monkeypatch):
     assert not (old / "download/source.m4a").exists()
     assert not (old / "audio.wav").exists()
     assert (recent / "audio.wav").exists()
+
+
+def test_cancel_keeps_reusable_inputs_and_removes_partial_outputs(tmp_path):
+    run = pipeline.create_run(tmp_path, "BV1cZ8x6sEhF")
+    metadata = json.loads((run / "input.json").read_text())
+    (run / "download").mkdir()
+    (run / "download/source.m4a").write_bytes(b"media")
+    pipeline.write_json(
+        run / "download/source.info.json",
+        {"title": "Test", "uploader": "UP", "duration": 60},
+    )
+    (run / "download/source.m4a.part").write_bytes(b"partial")
+    unit = {"unit_id": "unit-1", "start_ms": 0, "end_ms": 1000, "canonical_text": "text"}
+    (run / "canonical-transcript.jsonl").write_text(json.dumps(unit) + "\n")
+    (run / "source-text-events.jsonl").write_text("{}\n")
+    pipeline.write_json(
+        run / "asr.json",
+        {
+            "segments": [
+                {"ordinal": 0, "start_ms": 0, "end_ms": 1000, "text": "text", "words": []}
+            ]
+        },
+    )
+    (run / "transcript.md").write_text("text")
+    pipeline.write_json(
+        run / "transcript-manifest.json",
+        {
+            "status": "READY",
+            "video_id": metadata["video_id"],
+            "transcript_mode": "asr-only",
+            "normalizer_version": NORMALIZER_VERSION,
+            "fusion_version": FUSION_VERSION,
+            "canonical_unit_count": 1,
+            "artifacts": {
+                "canonical_transcript": "canonical-transcript.jsonl",
+                "source_text_events": "source-text-events.jsonl",
+                "transcript_manifest": "transcript-manifest.json",
+            },
+        },
+    )
+    for name in ("audio.wav", "report.html", "report.png", "pi.events.jsonl", "asr-task.json"):
+        (run / name).write_text("partial")
+    (run / "sessions").mkdir()
+    (run / "sessions/partial.jsonl").write_text("partial")
+
+    cleanup_cancelled_run(run)
+
+    for name in (
+        "download/source.m4a", "download/source.info.json", "asr.json",
+        "canonical-transcript.jsonl", "source-text-events.jsonl",
+        "transcript-manifest.json", "transcript.md", "input.json", "status.json",
+    ):
+        assert (run / name).exists()
+    for name in (
+        "download/source.m4a.part", "audio.wav", "report.html", "report.png",
+        "pi.events.jsonl", "asr-task.json", "sessions",
+    ):
+        assert not (run / name).exists()
+
+
+def test_cancel_removes_incomplete_download_and_transcript(tmp_path):
+    run = pipeline.create_run(tmp_path, "BV1cZ8x6sEhF")
+    (run / "download").mkdir()
+    (run / "download/source.m4a.part").write_bytes(b"partial")
+    (run / "asr.json").write_text("{}")
+    (run / "canonical-transcript.jsonl").write_text("")
+    (run / "audio.wav").write_bytes(b"partial")
+
+    cleanup_cancelled_run(run)
+
+    assert not (run / "download").exists()
+    assert not (run / "asr.json").exists()
+    assert not (run / "canonical-transcript.jsonl").exists()
+    assert not (run / "audio.wav").exists()
+    assert (run / "input.json").exists()
+    assert (run / "status.json").exists()
+
+
+def test_cancel_keeps_completed_asr_before_transcript_is_ready(tmp_path):
+    run = pipeline.create_run(tmp_path, "BV1cZ8x6sEhF")
+    pipeline.write_json(
+        run / "asr.json",
+        {
+            "segments": [
+                {"ordinal": 0, "start_ms": 0, "end_ms": 1000, "text": "text", "words": []}
+            ]
+        },
+    )
+    (run / "canonical-transcript.jsonl").write_text("")
+
+    cleanup_cancelled_run(run)
+
+    assert (run / "asr.json").exists()
+    assert not (run / "canonical-transcript.jsonl").exists()

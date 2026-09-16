@@ -26,7 +26,14 @@ def completed(tmp_path):
     unit = {"unit_id": "unit-000001", "start_ms": 0, "end_ms": 1000, "canonical_text": "hello"}
     (run / "canonical-transcript.jsonl").write_text(json.dumps(unit) + "\n")
     (run / "source-text-events.jsonl").write_text("{}\n")
-    (run / "asr.json").write_text("{}")
+    pipeline.write_json(
+        run / "asr.json",
+        {
+            "segments": [
+                {"ordinal": 0, "start_ms": 0, "end_ms": 1000, "text": "hello", "words": []}
+            ]
+        },
+    )
     pipeline.write_json(
         run / "transcript-manifest.json",
         {
@@ -136,7 +143,7 @@ def test_no_history_runs_normal_pipeline(tmp_path, monkeypatch):
     assert calls == ["download"]
 
 
-def test_download_only_hit_still_transcribes(completed, monkeypatch):
+def test_completed_asr_is_reused_when_transcript_is_incomplete(completed, monkeypatch):
     previous, _ = completed
     (previous / "canonical-transcript.jsonl").unlink()
     run = pipeline.create_run(previous.parent, URL)
@@ -148,8 +155,7 @@ def test_download_only_hit_still_transcribes(completed, monkeypatch):
         return SimpleNamespace(path=output, probe=SimpleNamespace(duration_ms=1000))
 
     def transcribe(*args, **kwargs):
-        calls.append("asr")
-        return SimpleNamespace(to_dict=lambda: {}, segments=[])
+        pytest.fail("completed ASR must be reused")
 
     def build(*args, **kwargs):
         calls.append("canonical")
@@ -173,7 +179,46 @@ def test_download_only_hit_still_transcribes(completed, monkeypatch):
     assert status["state"] == "RENDERED"
     assert status["download_reused_from"] == previous.name
     assert status["transcript_reused_from"] is None
-    assert calls == ["audio", "asr", "canonical", "report"]
+    assert status["asr_reused_from"] == previous.name
+    assert calls == ["audio", "canonical", "report"]
+
+
+def test_invalid_asr_is_not_reused(completed, monkeypatch):
+    previous, _ = completed
+    (previous / "canonical-transcript.jsonl").unlink()
+    (previous / "asr.json").write_text("{}")
+    run = pipeline.create_run(previous.parent, URL)
+    called = []
+
+    def extract(media, output):
+        return SimpleNamespace(path=output, probe=SimpleNamespace(duration_ms=1000))
+
+    def transcribe(*args, **kwargs):
+        called.append("asr")
+        segment = SimpleNamespace()
+        return SimpleNamespace(
+            to_dict=lambda: {"segments": []},
+            segments=[segment],
+        )
+
+    def build(*args, **kwargs):
+        unit = SimpleNamespace(
+            unit_id="unit-000001", start_ms=0, end_ms=1000, canonical_text="fresh text"
+        )
+        return SimpleNamespace(canonical_units=[unit]), {}, {}
+
+    async def report(current):
+        return None
+
+    monkeypatch.setattr(pipeline, "extract_audio", extract)
+    monkeypatch.setattr(pipeline, "transcribe_audio", transcribe)
+    monkeypatch.setattr(pipeline, "build_transcript", build)
+    monkeypatch.setattr(
+        pipeline, "PiRunner",
+        lambda: SimpleNamespace(run=report, provider="test", model="test"),
+    )
+    assert pipeline.generate(run)["state"] == "RENDERED"
+    assert called == ["asr"]
 
 
 @pytest.mark.parametrize(

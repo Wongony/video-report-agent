@@ -5,7 +5,10 @@ import os
 import shutil
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from .ingest import DownloadResult, UrlIngestError, _metadata
+from .schemas import AsrSegment
 from .transcript_foundation import FUSION_VERSION, NORMALIZER_VERSION
 
 
@@ -19,6 +22,76 @@ def previous_runs(run: Path, video_id: str):
                 yield candidate, metadata
         except (OSError, ValueError, AttributeError):
             continue
+
+
+def same_asr_config(previous: dict, metadata: dict) -> bool:
+    identity = (
+        "asr_backend",
+        "asr_provider",
+        "asr_model",
+        "asr_language",
+        "asr_parameters",
+        "asr_base_url",
+    )
+    return bool(previous.get("asr_backend")) and all(
+        previous.get(key) == metadata.get(key) for key in identity
+    )
+
+
+def validated_asr(candidate: Path, metadata: dict):
+    try:
+        previous = json.loads((candidate / "input.json").read_text())
+        payload = json.loads((candidate / "asr.json").read_text())
+        segments = payload.get("segments")
+        if (
+            not same_asr_config(previous, metadata)
+            or not isinstance(segments, list)
+            or not segments
+        ):
+            return None
+        parsed = [AsrSegment.model_validate(segment) for segment in segments]
+        if [segment.ordinal for segment in parsed] != list(range(len(parsed))):
+            return None
+        return candidate / "asr.json"
+    except (OSError, ValueError, TypeError, AttributeError, ValidationError):
+        return None
+
+
+def reuse_asr(run: Path, metadata: dict):
+    for candidate, _ in previous_runs(run, metadata["video_id"]):
+        source = validated_asr(candidate, metadata)
+        if source is not None:
+            shutil.copy2(source, run / "asr.json")
+            return candidate.name
+    return None
+
+
+def validated_transcript(candidate: Path, metadata: dict):
+    """Return the reusable transcript files and units, or ``None``."""
+    try:
+        manifest = json.loads((candidate / "transcript-manifest.json").read_text())
+        if (
+            manifest.get("status") != "READY"
+            or manifest.get("video_id") != metadata["video_id"]
+            or manifest.get("transcript_mode") != metadata.get("transcript_mode", "asr-only")
+            or manifest.get("normalizer_version") != NORMALIZER_VERSION
+            or manifest.get("fusion_version") != FUSION_VERSION
+        ):
+            return None
+        if validated_asr(candidate, metadata) is None:
+            return None
+        names = list(manifest["artifacts"].values()) + ["asr.json"]
+        if any(Path(name).name != name or not (candidate / name).is_file() for name in names):
+            return None
+        units = [
+            json.loads(line)
+            for line in (candidate / "canonical-transcript.jsonl").read_text().splitlines()
+        ]
+        if not units or len(units) != manifest["canonical_unit_count"]:
+            return None
+        return names, units
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
 
 
 def reuse_download(source, run: Path, *, request_subtitles: bool, audio_only: bool = False):
@@ -69,17 +142,7 @@ def reuse_download(source, run: Path, *, request_subtitles: bool, audio_only: bo
 
 def reuse_transcript(run: Path, metadata: dict):
     for candidate, previous in previous_runs(run, metadata["video_id"]):
-        identity = (
-            "asr_backend",
-            "asr_provider",
-            "asr_model",
-            "asr_language",
-            "asr_parameters",
-            "asr_base_url",
-        )
-        if not previous.get("asr_backend") or any(
-            previous.get(key) != metadata.get(key) for key in identity
-        ):
+        if not same_asr_config(previous, metadata):
             continue
         if metadata.get("transcript_mode") == "fused" and metadata.get("ocr_mode") != "off":
             if any(previous.get(k) != metadata.get(k) for k in ("ocr_backend", "ocr_model")):
@@ -93,34 +156,21 @@ def reuse_transcript(run: Path, metadata: dict):
         old_sub, new_sub = previous.get("subtitle_file"), metadata.get("subtitle_file")
         if bool(old_sub) != bool(new_sub):
             continue
-        try:
-            if old_sub and (candidate / old_sub).read_bytes() != (run / new_sub).read_bytes():
+        if old_sub:
+            try:
+                if (candidate / old_sub).read_bytes() != (run / new_sub).read_bytes():
+                    continue
+            except OSError:
                 continue
-            manifest = json.loads((candidate / "transcript-manifest.json").read_text())
-            if (
-                manifest.get("status") != "READY"
-                or manifest.get("video_id") != metadata["video_id"]
-                or manifest.get("transcript_mode") != metadata.get("transcript_mode", "asr-only")
-                or manifest.get("normalizer_version") != NORMALIZER_VERSION
-                or manifest.get("fusion_version") != FUSION_VERSION
-            ):
-                continue
-            names = list(manifest["artifacts"].values()) + ["asr.json"]
-            if any(Path(name).name != name or not (candidate / name).is_file() for name in names):
-                continue
-            units = [
-                json.loads(line)
-                for line in (candidate / "canonical-transcript.jsonl").read_text().splitlines()
-            ]
-            if not units or len(units) != manifest["canonical_unit_count"]:
-                continue
-            lines = [
-                f"[{u['unit_id']} | {u['start_ms'] / 1000:.3f}–"
-                f"{u['end_ms'] / 1000:.3f}s] {u['canonical_text']}"
-                for u in units
-            ]
-        except (OSError, ValueError, KeyError, TypeError):
+        validated = validated_transcript(candidate, metadata)
+        if validated is None:
             continue
+        names, units = validated
+        lines = [
+            f"[{u['unit_id']} | {u['start_ms'] / 1000:.3f}–"
+            f"{u['end_ms'] / 1000:.3f}s] {u['canonical_text']}"
+            for u in units
+        ]
         for name in names:
             shutil.copy2(candidate / name, run / name)
         (run / "transcript.md").write_text(
