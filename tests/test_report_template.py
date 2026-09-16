@@ -22,9 +22,21 @@ def test_footer_keeps_report_label_left_and_domain_right():
 
     assert "footer{display:flex;align-items:baseline;justify-content:space-between;" in template
     assert (
-        "<footer><span>视频 · 本地阅读报告</span>"
-        "<span>vreport.tri4t.xyz</span></footer>"
+        '<footer><span>视频·精读报告</span>'
+        '<a class="footer-link" href="https://vreport.tri4t.xyz/">'
+        "vreport.tri4t.xyz</a></footer>"
     ) in template
+    assert ".footer-link,.footer-link:hover{color:inherit;text-decoration:underline}" in template
+
+
+def test_header_contract_keeps_summary_and_full_source_metadata():
+    template = TEMPLATE.read_text()
+
+    assert '<p class="lead">{{LEAD}}</p>' in template
+    assert '<p class="meta">{{ATTRIBUTION}}</p>' in template
+    assert "导语固定保留" in template
+    assert "平台；UP 主；《原视频完整标题》；可点击的原视频裸 URL" in template
+    assert ".meta a{color:inherit;text-decoration:underline}" in template
 
 
 def test_template_keeps_paper_white_and_canvas_light_gray():
