@@ -142,6 +142,8 @@ DASHSCOPE_API_KEY=your-dashscope-api-key
 
 The `paraformer` backend supports `paraformer-v1`, `paraformer-v2`, and the Fun-ASR file-transcription models adapted in the code. Changes to `.env` take effect on the next CLI invocation. Cloud ASR uploads audio; the report model receives transcript content needed for generation.
 
+For audio at least 60 minutes long, this backend looks for a quiet pause of at least 250 ms within 30 seconds of the midpoint and transcribes two non-overlapping parts concurrently. Shorter audio, or audio without a suitable pause, stays in one request. Sentence and word timestamps are shifted back to the original timeline, and usage is summed across both parts. Each report still occupies one task slot, but can use two concurrent cloud ASR requests.
+
 **Standalone Skill use lets you choose any external ASR workflow. The project pipeline currently includes only the `mlx` and `paraformer` backends.** Other local models or APIs require an adapter, not just a model-name change. Windows users can start with the standalone Skill workflow above; native Windows execution of the complete project is not presented here as verified.
 
 ### Start and generate

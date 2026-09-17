@@ -3,14 +3,57 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
+import wave
 from dataclasses import dataclass
 from pathlib import Path
 
 
 class AudioExtractionError(RuntimeError):
     """Raised when an audio artifact cannot be created and verified."""
+
+
+def midpoint_pause_ms(path: Path, duration_ms: int) -> int | None:
+    """Find a >=250 ms quiet pause within 30 seconds of the midpoint; never hard-cut."""
+    start_ms = duration_ms // 2 - 30_000
+    completed = subprocess.run(
+        [
+            _require_binary("ffmpeg"), "-hide_banner", "-nostdin",
+            "-ss", str(start_ms / 1000), "-t", "60", "-i", str(path),
+            "-af", "silencedetect=noise=-40dB:d=0.25", "-f", "null", "-",
+        ],
+        capture_output=True, text=True, check=False,
+    )
+    if completed.returncode != 0:
+        raise AudioExtractionError("FFmpeg silence detection failed")
+    pauses = []
+    beginning = None
+    for kind, value in re.findall(r"silence_(start|end): ([\d.]+)", completed.stderr):
+        if kind == "start":
+            beginning = float(value)
+        elif beginning is not None:
+            end = float(value)
+            if end - beginning >= 0.25:
+                pauses.append(start_ms + round((beginning + end) * 500))
+            beginning = None
+    return min(pauses, key=lambda point: abs(point - duration_ms / 2)) if pauses else None
+
+
+def split_pcm_audio(path: Path, directory: Path, split_ms: int) -> tuple[Path, Path]:
+    """Copy consecutive PCM frames without re-encoding, gaps or overlap."""
+    parts = (directory / "part-0.wav", directory / "part-1.wav")
+    with wave.open(str(path)) as source:
+        split_frame = round(split_ms * source.getframerate() / 1000)
+        for target, frames in zip(parts, (split_frame, source.getnframes() - split_frame)):
+            with wave.open(str(target), "wb") as output:
+                output.setparams(source.getparams())
+                while frames:
+                    count = min(frames, source.getframerate() * 30)
+                    output.writeframes(source.readframes(count))
+                    frames -= count
+    return parts
 
 
 @dataclass(frozen=True)
