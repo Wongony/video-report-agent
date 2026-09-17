@@ -2,6 +2,12 @@
 
 import json
 import math
+import os
+import tempfile
+from pathlib import Path
+
+# Bump for schema OR counting/pricing semantics changes, even if fields stay identical.
+USAGE_CACHE_VERSION = 1
 
 
 def read_object(path):
@@ -19,17 +25,19 @@ def number(value):
     )
 
 
-def call_costs(run, status, asr_rate):
+def _llm_costs(run):
     """Count only completed assistant-message events, never streamed usage copies."""
     calls, tokens, estimates, unknown = 0, 0, [], 0
     path = run / "pi.events.jsonl"
     if path.is_file():
-        with path.open() as stream:
+        with path.open("rb") as stream:
             for line in stream:
+                if not line.endswith(b"\n"):
+                    break
                 try:
                     event = json.loads(line)
-                except ValueError:
-                    continue  # A currently running process may have a partial last line.
+                except (ValueError, UnicodeError):
+                    continue
                 if not isinstance(event, dict) or event.get("type") != "message_end":
                     continue
                 message = event.get("message", {})
@@ -46,6 +54,14 @@ def call_costs(run, status, asr_rate):
                     estimates.append(cost)
                 else:
                     unknown += 1
+    return {
+        "llm_calls": calls, "tokens": tokens,
+        "llm_usd_estimate": sum(estimates) if estimates else None,
+        "llm_unpriced_calls": unknown,
+    }
+
+
+def _asr_costs(run, status, asr_rate):
     asr = read_object(run / "asr.json")
     duration = asr.get("usage", {}).get("content_duration_ms")
     if status.get("transcript_reused_from"):
@@ -57,8 +73,70 @@ def call_costs(run, status, asr_rate):
     else:
         asr_cost, asr_basis = None, "unknown"
     return {
-        "llm_calls": calls, "tokens": tokens,
-        "llm_usd_estimate": sum(estimates) if estimates else None,
-        "llm_unpriced_calls": unknown,
         "asr_cny_estimate": asr_cost, "asr_basis": asr_basis,
     }
+
+
+def call_costs(run, status, asr_rate):
+    """Calculate current estimates without reading or writing a cache."""
+    return {**_llm_costs(run), **_asr_costs(run, status, asr_rate)}
+
+
+def _signature(path):
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return None
+    # Metadata precision depends on the host filesystem; this is not a content hash.
+    return {
+        "device": stat.st_dev, "inode": stat.st_ino, "size": stat.st_size,
+        "mtime_ns": stat.st_mtime_ns, "ctime_ns": stat.st_ctime_ns,
+    }
+
+
+def _valid_llm(value):
+    return (
+        isinstance(value, dict)
+        and set(value) == {"llm_calls", "tokens", "llm_usd_estimate", "llm_unpriced_calls"}
+        and all(number(value[key]) for key in ("llm_calls", "tokens", "llm_unpriced_calls"))
+        and (value["llm_usd_estimate"] is None or number(value["llm_usd_estimate"]))
+    )
+
+
+def _write_cache(path, data):
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", dir=path.parent, prefix=".usage-", suffix=".tmp", delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            json.dump(data, stream)
+        os.replace(temporary, path)
+    except OSError:
+        pass  # Caching is optional; a write failure must not hide computed usage.
+    finally:
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def cached_call_costs(run, status, asr_rate):
+    """Reuse persisted LLM estimates until the log changes; always refresh ASR."""
+    path = run / "pi.events.jsonl"
+    signature = _signature(path)
+    cache_path = run / "usage.json"
+    cache = read_object(cache_path)
+    llm = cache.get("llm")
+    if not (
+        cache.get("version") == USAGE_CACHE_VERSION
+        and "source" in cache and cache["source"] == signature
+        and _valid_llm(llm)
+    ):
+        llm = _llm_costs(run)
+        if signature == _signature(path):
+            _write_cache(cache_path, {
+                "version": USAGE_CACHE_VERSION, "source": signature, "llm": llm,
+            })
+    return {**llm, **_asr_costs(run, status, asr_rate)}
