@@ -22,7 +22,7 @@ def test_footer_keeps_report_label_left_and_domain_right():
 
     assert "footer{display:flex;align-items:baseline;justify-content:space-between;" in template
     assert (
-        '<footer><span>视频·精读报告</span>'
+        '<footer><span>视频报告·精读</span>'
         '<a class="footer-link" href="https://vreport.tri4t.xyz/">'
         "vreport.tri4t.xyz</a></footer>"
     ) in template
@@ -79,6 +79,6 @@ def test_brief_template_fills_shared_delivery_contract(tmp_path):
     html = report.read_text()
     assert "{{" not in html
     assert "Original &lt;source&gt;" in html
-    assert "视频·精读报告" in html
+    assert "视频报告·速览" in html
     assert 'href="https://vreport.tri4t.xyz/"' in html
     assert 'class="brief-paper"' in html
