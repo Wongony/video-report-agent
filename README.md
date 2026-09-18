@@ -24,7 +24,7 @@ ASR converts speech to text. Your Coding Agent's model reads that text and creat
 
 ### 2. Get the Skill and template
 
-Download this repository using **Code → Download ZIP** and extract it, or clone it with `git clone https://github.com/imexlovery/video-report-agent.git`. Copy the complete [`src/video_report_agent/skills/video-report/`](src/video_report_agent/skills/video-report/) directory. Keep `SKILL.md`, `assets/`, and `references/` together with their relative paths intact.
+Download this repository using **Code → Download ZIP** and extract it, or clone it with `git clone https://github.com/imexlovery/video-report-agent.git`. Copy the complete [`src/video_report_agent/skills/video-report/`](src/video_report_agent/skills/video-report/) directory. Keep `SKILL.md`, `modes/`, `assets/`, and `references/` together with their relative paths intact.
 
 Arrange your working folder as follows:
 
@@ -33,9 +33,11 @@ my-report/
 ├── transcript.md
 ├── video-report/
 │   ├── SKILL.md
+│   ├── modes/                # Read only standard.md or brief.md
 │   ├── references/           # Editing guidance selected by the Skill
 │   └── assets/
-│       └── report-template.html
+│       ├── report-template.html       # Standard only
+│       └── brief-report-template.html # Brief only
 └── output/
 ```
 
@@ -49,7 +51,7 @@ Open your Coding Agent in that working folder and send:
 
 ```text
 Read video-report/SKILL.md and follow its instructions.
-Use video-report/assets/report-template.html as the default style foundation.
+Read only the template selected by the reading mode guide.
 Read transcript.md in full and produce a self-contained HTML reading report.
 
 Use output/ as this task's output directory and write output/report.html.
@@ -58,6 +60,13 @@ Include chapter times only when reliable source timestamps are available.
 Do not modify the original transcript. If browser tools are available, inspect
 the page layout; otherwise, state that only static checks were performed.
 ```
+
+To request a concise overview, add `Use report_mode=brief (精简速览).` to your prompt.
+The default is `standard` (标准阅读). Each mode has its own template and components;
+only the selected mode guide and template are read. Both modes
+read the full transcript and preserve decisive conditions, attribution and number definitions.
+The CLI accepts `video-report generate <url> --report-mode brief`. Each task saves its mode;
+changing modes creates a new report and can reuse compatible source transcripts.
 
 Open `output/report.html` in a browser. The Skill guides content organization, source fidelity, and layout. Results depend on transcript quality, the Agent's model, and available tools. The Skill does not include an ASR engine or configure your transcription service.
 
@@ -170,7 +179,7 @@ uv run ruff check src tests
 uv lock --check
 ```
 
-See [`video-report/SKILL.md`](src/video_report_agent/skills/video-report/SKILL.md) for report-writing instructions and [`report-template.html`](src/video_report_agent/skills/video-report/assets/report-template.html) for the default styles.
+See [`video-report/SKILL.md`](src/video_report_agent/skills/video-report/SKILL.md) for report-writing instructions and [`report-template.html`](src/video_report_agent/skills/video-report/assets/report-template.html) for Standard styles; [Brief](src/video_report_agent/skills/video-report/assets/brief-report-template.html) uses its own template.
 
 ## Core package configuration
 

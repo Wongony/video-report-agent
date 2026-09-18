@@ -55,15 +55,36 @@ def completed(tmp_path):
     return run, metadata
 
 
-def test_pipeline_reuses_inputs_and_generates_new_report(completed, monkeypatch):
-    previous, _ = completed
-    run = pipeline.create_run(previous.parent, URL + "?p=1&share_source=copy")
+@pytest.mark.parametrize("source_mode,target_mode", [
+    ("standard", "brief"), ("brief", "standard"), ("brief", None),
+])
+@pytest.mark.parametrize("media_pruned", [False, True])
+def test_pipeline_reuses_inputs_and_generates_new_report(
+    completed, monkeypatch, source_mode, target_mode, media_pruned,
+):
+    previous, metadata = completed
+    metadata.update(report_mode=source_mode, uploader="UP")
+    pipeline.write_json(previous / "input.json", metadata)
+    info = previous / "download/source.info.json"
+    source_info = json.loads(info.read_text())
+    source_info["description"] = "Original description"
+    pipeline.write_json(info, source_info)
+    if media_pruned:
+        (previous / "download/source.mp4").unlink()
+    run = pipeline.create_run(
+        previous.parent, URL + "?p=1&share_source=copy", report_mode=target_mode or "standard",
+    )
+    original_input = json.loads((run / "input.json").read_text())
+    if target_mode is None:
+        original_input.pop("report_mode")
+        pipeline.write_json(run / "input.json", original_input)
 
     def unexpected(*args, **kwargs):
         pytest.fail("download/FFmpeg/Whisper/build must be skipped")
 
     for name in (
         "download_bilibili_video",
+        "reuse_download",
         "extract_audio",
         "transcribe_audio",
         "build_transcript",
@@ -85,11 +106,15 @@ def test_pipeline_reuses_inputs_and_generates_new_report(completed, monkeypatch)
     assert "image_url" not in status
     assert status["title"] == "Test"
     assert json.loads((run / "status.json").read_text())["title"] == "Test"
-    assert status["download_reused_from"] == previous.name
+    assert status["download_reused_from"] is None
     assert status["transcript_reused_from"] == previous.name
-    assert (run / "download/source.mp4").stat().st_ino == (
-        previous / "download/source.mp4"
-    ).stat().st_ino
+    saved_input = json.loads((run / "input.json").read_text())
+    assert saved_input.get("report_mode") == original_input.get("report_mode") == target_mode
+    assert ("report_mode" in saved_input) == (target_mode is not None)
+    assert saved_input["uploader"] == "UP"
+    assert json.loads((run / "download/source.info.json").read_text()) == source_info
+    assert not (run / "download/source.mp4").exists()
+    assert (run / "report.html").read_text() == "fresh report"
     assert (run / "canonical-transcript.jsonl").stat().st_ino != (
         previous / "canonical-transcript.jsonl"
     ).stat().st_ino

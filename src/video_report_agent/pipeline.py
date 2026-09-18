@@ -35,6 +35,7 @@ def create_run(
     root: Path,
     url: str,
     *,
+    report_mode="standard",
     transcript_mode="asr-only",
     ocr_mode="off",
     ocr_roi=None,
@@ -44,6 +45,8 @@ def create_run(
     asr_model=None,
     ocr_backend=None,
 ) -> Path:
+    if report_mode not in ("standard", "brief"):
+        raise ValueError("report_mode must be standard or brief")
     if transcript_mode not in {"asr-only", "fused"}:
         raise ValueError("transcript_mode must be asr-only or fused")
     if ocr_mode == "on":
@@ -63,6 +66,7 @@ def create_run(
             **media_config,
             "url": source.canonical_url,
             "video_id": source.video_id,
+            "report_mode": report_mode,
             "transcript_mode": transcript_mode,
             "ocr_mode": ocr_mode,
             "ocr_roi": ocr_roi,
@@ -98,35 +102,39 @@ def generate(run: Path) -> dict:
 
     trace = RunTrace(run)
     try:
-        update("DOWNLOADING")
-        with trace.span("download", input={"video_id": metadata["video_id"]}) as detail:
-            source = validate_bilibili_url(metadata["url"])
-            request_subtitles = metadata.get("transcript_mode") == "fused"
-            audio_only = metadata.get("transcript_mode", "asr-only") == "asr-only"
-            downloaded, download_source = reuse_download(
-                source,
-                run,
-                request_subtitles=request_subtitles,
-                audio_only=audio_only,
-            )
-            if downloaded is None:
-                downloaded = download_bilibili_video(
+        transcript_source = reuse_transcript(run, metadata)
+        status["download_reused_from"] = None
+        if transcript_source is None:
+            update("DOWNLOADING")
+            with trace.span("download", input={"video_id": metadata["video_id"]}) as detail:
+                source = validate_bilibili_url(metadata["url"])
+                request_subtitles = metadata.get("transcript_mode") == "fused"
+                audio_only = metadata.get("transcript_mode", "asr-only") == "asr-only"
+                downloaded, download_source = reuse_download(
                     source,
                     run,
                     request_subtitles=request_subtitles,
                     audio_only=audio_only,
                 )
-            detail.update(output={"media": downloaded.media_path.name}, reused_from=download_source)
-        status["download_reused_from"] = download_source
-        metadata.update(
-            download_audio_only=audio_only,
-            title=downloaded.title,
-            uploader=downloaded.uploader,
-            attribution=downloaded.attribution,
-        )
+                if downloaded is None:
+                    downloaded = download_bilibili_video(
+                        source,
+                        run,
+                        request_subtitles=request_subtitles,
+                        audio_only=audio_only,
+                    )
+                detail.update(
+                    output={"media": downloaded.media_path.name}, reused_from=download_source,
+                )
+            status["download_reused_from"] = download_source
+            metadata.update(
+                download_audio_only=audio_only,
+                title=downloaded.title,
+                uploader=downloaded.uploader,
+                attribution=downloaded.attribution,
+            )
         write_json(run / "input.json", metadata)
-        status["title"] = downloaded.title
-        transcript_source = reuse_transcript(run, metadata)
+        status["title"] = metadata.get("title")
         status["transcript_reused_from"] = transcript_source
         if transcript_source is None:
             update("TRANSCRIBING")

@@ -18,6 +18,7 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("generate")
     run.add_argument("url")
+    run.add_argument("--report-mode", choices=["standard", "brief"], default="standard")
     run.add_argument("--transcript-mode", choices=["asr-only", "fused"], default="asr-only")
     run.add_argument("--ocr-mode", choices=["off", "auto", "roi", "on"], default="off")
     run.add_argument("--ocr-roi")
@@ -39,6 +40,7 @@ def main():
             create_run(
                 args.runs,
                 args.url,
+                report_mode=args.report_mode,
                 transcript_mode=args.transcript_mode,
                 ocr_mode=args.ocr_mode,
                 ocr_roi=args.ocr_roi,

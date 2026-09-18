@@ -166,6 +166,15 @@ def reuse_transcript(run: Path, metadata: dict):
         if validated is None:
             continue
         names, units = validated
+        # Report mode does not affect source identity. Keep the source metadata and
+        # description even when retention has already removed the original media.
+        metadata.update({
+            key: previous[key] for key in ("title", "uploader", "attribution") if key in previous
+        })
+        info = candidate / "download" / "source.info.json"
+        if info.is_file():
+            (run / "download").mkdir(exist_ok=True)
+            shutil.copy2(info, run / "download" / "source.info.json")
         lines = [
             f"[{u['unit_id']} | {u['start_ms'] / 1000:.3f}–"
             f"{u['end_ms'] / 1000:.3f}s] {u['canonical_text']}"

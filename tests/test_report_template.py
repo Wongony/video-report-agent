@@ -57,3 +57,28 @@ def test_bar_component_pins_block_display_on_fill():
     assert ".bar-track{" in template
     assert ".bar-fill{display:block;height:100%;" in template
     assert ".bar-value{" in template
+
+
+def test_brief_template_fills_shared_delivery_contract(tmp_path):
+    from video_report_agent.report_content import fill_video_description
+
+    brief = TEMPLATE.with_name("brief-report-template.html").read_text()
+    rendered = brief
+    for name, value in {
+        "TITLE": "Fixture", "SUBTITLE": "", "LEAD": "Source overview",
+        "ATTRIBUTION": "Fixture source", "BODY": "<section>Body</section>",
+        "SOURCES": "Fixture source mapping",
+    }.items():
+        rendered = rendered.replace("{{" + name + "}}", value)
+    rendered = rendered.split("<!-- BRIEF_EXAMPLES_START")[0]
+    report = tmp_path / "report.html"
+    report.write_text(rendered)
+    (tmp_path / "download").mkdir()
+    (tmp_path / "download/source.info.json").write_text('{"description":"Original <source>"}')
+    fill_video_description(report, tmp_path)
+    html = report.read_text()
+    assert "{{" not in html
+    assert "Original &lt;source&gt;" in html
+    assert "视频·精读报告" in html
+    assert 'href="https://vreport.tri4t.xyz/"' in html
+    assert 'class="brief-paper"' in html

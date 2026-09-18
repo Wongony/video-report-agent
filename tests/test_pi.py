@@ -189,7 +189,8 @@ def test_selected_provider_saved_key_takes_precedence(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("explicit", [False, True])
-def test_custom_skill_directory(tmp_path, monkeypatch, explicit):
+@pytest.mark.parametrize("report_mode", ["standard", "brief"])
+def test_custom_skill_directory(tmp_path, monkeypatch, explicit, report_mode):
     custom = tmp_path / "custom"
     (custom / "assets").mkdir(parents=True)
     (custom / "SKILL.md").write_text("custom skill marker")
@@ -211,6 +212,7 @@ print(json.dumps({"type":"agent_settled"}), flush=True)
     workspace = tmp_path / "run"
     workspace.mkdir()
     (workspace / "transcript.md").write_text("fixture")
+    (workspace / "input.json").write_text(json.dumps({"report_mode": report_mode}))
     runner = PiRunner(skill_dir=custom if explicit else None)
     assert asyncio.run(runner.run(workspace)) == workspace / "report.html"
     assert (tmp_path / "config/models.json").is_file()

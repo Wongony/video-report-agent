@@ -71,8 +71,34 @@ class PiRunner:
         env = os.environ.copy()
         env["PI_CODING_AGENT_DIR"] = str(PI_AGENT_DIR)
         env["VIDEO_REPORT_PYTHON"] = sys.executable
+        metadata_path = workspace / "input.json"
+        metadata = json.loads(metadata_path.read_text()) if metadata_path.is_file() else {}
+        report_mode = metadata.get("report_mode", "standard")
+        if report_mode not in ("standard", "brief"):
+            raise PiError("INPUT_REJECTED", "report_mode must be standard or brief")
         skill = workspace
-        shutil.copytree(self.skill_dir, workspace, dirs_exist_ok=True)
+        other_mode = "brief" if report_mode == "standard" else "standard"
+        templates = {"standard": "report-template.html", "brief": "brief-report-template.html"}
+        # Legacy custom Skills own their template; packaged/copyable dual-mode
+        # Skills select and stage exactly one template along with one mode guide.
+        separate_templates = (
+            self.skill_dir == SKILL.resolve()
+            or (self.skill_dir / "assets" / templates["brief"]).is_file()
+        )
+        template_name = templates[report_mode] if separate_templates else templates["standard"]
+        if separate_templates and not (self.skill_dir / "assets" / template_name).is_file():
+            raise PiError("IMPLEMENTATION_FAILURE", f"Selected template is missing: {template_name}")
+        excluded = {"modes": [f"{other_mode}.md"]}
+        if separate_templates:
+            excluded["assets"] = [templates[other_mode]]
+        for directory, names in excluded.items():
+            for name in names:
+                (workspace / directory / name).unlink(missing_ok=True)
+        shutil.copytree(
+            self.skill_dir, workspace, dirs_exist_ok=True,
+            ignore=lambda directory, names: excluded.get(Path(directory).name, [])
+            if Path(directory).parent == self.skill_dir else [],
+        )
         (workspace / "assets").mkdir(exist_ok=True)
         command = [
             executable,
@@ -112,9 +138,21 @@ class PiRunner:
         prompt = (
             "读取 transcript.md 和 input.json，按照 video-report skill "
             "生成完整报告，写入 report.html。"
-            "原样保留 assets/report-template.html 中的 {{VIDEO_DESCRIPTION}} 占位符一次，"
+            f"读取 assets/{template_name} 作为本次唯一模板，"
+            "原样保留其中的 {{VIDEO_DESCRIPTION}} 占位符一次，"
             "放在题头之后、正文之前；不要读取、改写或自行生成视频简介，运行时会按原始元数据填充。"
         )
+        prompt += (
+            f"本任务 report_mode={report_mode}，是任务自身保存的不可变输入；"
+            "不根据当前配置或视频内容重新选择模式。"
+        )
+        mode_path = skill / "modes" / f"{report_mode}.md"
+        if mode_path.is_file():
+            prompt += (
+                f"本次只读取 modes/{report_mode}.md 这一份模式文件，不读取另一模式。"
+                "Profile 只指导内容关系表达，不覆盖所选模式的展开程度。"
+                "只使用当前模式的模板、样式与组件，不读取或混入另一模式的视觉资源。"
+            )
         if self.review:
             prompt += (
                 "本次启用报告检查：写完 report.html 后必须调用 inspect_report。"
