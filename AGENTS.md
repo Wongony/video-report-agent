@@ -17,3 +17,9 @@ Evaluation tooling and approved public smoke/benchmarks belong in Core. Raw real
 - Keep pipeline stage events in `run.trace.jsonl` and Agent details in `pi.events.jsonl`. Extend the relevant layer without unifying logs or introducing a tracing framework as incidental cleanup.
 - For report quality comparisons, hold transcript and generation settings constant except for the variable under test. Assess source meaning (numbers, conditions, attribution and causality) separately from HTML validity and visual layout; valid source IDs alone do not establish fidelity.
 - For report template/layout changes, inspect a representative rendered example at the affected viewport when feasible. State when only static/tests were checked, and whether the change affects future generation or an existing report. Do not regenerate old reports implicitly.
+
+## Report design iteration
+
+- For local component redesigns, read the selected mode's current template and `docs/report-design-preferences.md` first. Prototype inside that template with representative existing components; preserve the paper, canvas, typography and surrounding visual language unless the user requests a page redesign.
+- When the user reviews alternatives and unambiguously selects one (for example, “D”), treat the selection as authorization to adopt it in the relevant generation Skill/template and record the preference. Do not merely switch the preview, ask for confirmation again, or wait for the word “adopt”. If the user explicitly asks only to preview or retain a sample, honor that scope. Ask only when the selected alternative or target mode is genuinely unresolved.
+- Adoption applies to future generation in the selected mode. Commits, pushes, deployments and regeneration of historical reports still require their own user authorization.
