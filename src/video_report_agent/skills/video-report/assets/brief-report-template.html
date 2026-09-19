@@ -14,6 +14,14 @@
 .brief-feature-split{display:grid;grid-template-columns:1fr 260px;gap:26px;align-items:center}.brief-frequencies{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.brief-frequencies>span{font-family:ui-monospace,monospace;text-align:center;background:#ffffffa8;border-radius:14px;padding:9px 0;font-size:21px;font-weight:650}.brief-frequencies small{font-size:18px}.brief-measure{font-size:18px;margin-top:9px;color:#40577a}.brief-path{display:grid;grid-template-columns:1fr 58px 1fr 58px 1fr;align-items:stretch;margin:20px 0}.brief-path>.brief-step::before{display:none}.brief-path .brief-step h3{font-size:18px}.brief-connector{align-self:center;text-align:center;font-size:18px;line-height:1.5;color:#40577a}.brief-connector b{display:block;font-size:26px;line-height:1.2;font-weight:400}.brief-minor-pair{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px}.brief-minor-pair h3{font-size:18px}.brief-minor-pair p{font-size:18px;color:var(--brief-ink)}.brief-context span{display:inline-block;padding:3px 8px;border-radius:8px;background:#ffffff99;margin-right:6px}.brief-context i{font-style:normal;margin-right:6px}.brief-example{font-size:18px;color:var(--brief-ink);margin-top:7px}.brief-usecase small{display:block;font-size:18px;color:#42536b;margin-bottom:4px}
 .brief-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;padding:16px;margin:22px 0;background:#f1f6fc;border:1px solid #dde6ee;border-radius:16px}.brief-fact{padding:8px 10px;min-width:0}.brief-fact strong{display:block;font-size:26px;line-height:1.35;margin-bottom:8px;font-variant-numeric:tabular-nums}.brief-fact span{display:block;font-size:18px}.brief-feedback{display:flex;align-items:baseline;gap:18px;padding:13px 0;margin:18px 0;font-size:18px}.brief-feedback>strong{flex-shrink:0}.brief-note{margin:18px 0;padding-top:4px;display:block;font-size:18px;color:var(--brief-ink)}.brief-note>strong{color:var(--brief-ink);margin-right:8px}.brief-note p{display:inline}.brief-caption{margin-top:8px;font-size:18px;color:var(--brief-ink)}
 .brief-list{padding-left:1.2em;margin:12px 0}.brief-list>li+li{margin-top:8px}.brief-list>li::marker{color:var(--brief-blue)}.brief-table{border-collapse:separate;border-spacing:0;width:100%;max-width:100%;margin:18px 0;font-size:18px;line-height:1.6}.brief-table th,.brief-table td{text-align:left;vertical-align:top;padding:12px 14px;border-bottom:1px solid var(--brief-line)}.brief-table th{background:var(--brief-lilac)}.brief-table tbody tr:nth-child(even){background:#f4f7fc}.brief-map{margin:18px 0}.brief-map svg{display:block;width:100%;height:auto}.brief-map text{fill:var(--brief-ink);font-family:inherit;font-size:20px}.brief-map figcaption{margin-top:8px;font-size:18px;color:var(--brief-ink)}.brief-usecase{margin-top:12px;font-size:18px}.brief-usecase strong{display:block;margin-bottom:5px}.brief-context{padding:0;margin:12px 0 16px;font-size:18px}
+/* Two short label columns followed by two explanation columns; opt in only for this structure. */
+.brief-table-wrap{overflow-x:auto}
+.brief-table[data-layout="labels"]{table-layout:fixed;min-width:760px}
+.brief-table[data-layout="labels"] th,.brief-table[data-layout="labels"] td{padding:14px 16px;overflow-wrap:break-word;word-break:normal}
+.brief-table[data-layout="labels"] th:nth-child(1){width:16%}.brief-table[data-layout="labels"] th:nth-child(2){width:10%}.brief-table[data-layout="labels"] th:nth-child(3){width:38%}.brief-table[data-layout="labels"] th:nth-child(4){width:36%}
+.brief-table[data-layout="labels"] :is(th,td):nth-child(-n+2){white-space:nowrap}
+.brief-table[data-layout="labels"] :is(th,td):nth-child(3){border-right:1px solid var(--brief-line)}
+
 code{font-family:ui-monospace,monospace;font-size:.9em}pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:16px;background:#f3f5fa;border-radius:12px}details{margin-top:30px;padding-top:18px;border-top:1px solid var(--brief-line);font-size:13px;color:var(--brief-muted)}.brief-intro+details{margin-top:0;padding:0 0 18px;border-top:0;border-bottom:1px solid var(--brief-line)}summary{cursor:pointer;color:var(--brief-ink);width:fit-content}details[open] summary{margin-bottom:12px}.video-description-text{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}.brief-footer{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:26px;font-size:14px;color:var(--brief-muted)}.brief-footer a{color:inherit;text-decoration:underline}
 @media print{body{background:#fff}.brief-paper{margin:0 auto;border-radius:0}.brief-card,.brief-step,.brief-feature{break-inside:avoid}h2,h3{break-after:avoid}}
 
@@ -95,5 +103,14 @@ code{font-family:ui-monospace,monospace;font-size:.9em}pre{white-space:pre-wrap;
 <div class="brief-dimension"><h4>来源</h4><p>附上材料出处，方便读者回查。</p></div>
 <div class="brief-dimension"><h4>呈现</h4><p>检查标题和图文是否清楚可读。</p></div>
 </div></div>
+</section>
+
+<section class="brief-section"><h2>比较处理方式</h2>
+<!-- 仅适用于前两列为短标签、后两列为说明的四列表格。其他结构不要套用该列宽。 -->
+<div class="brief-table-wrap" role="region" aria-label="处理方式对照，可横向滚动" tabindex="0"><table class="brief-table" data-layout="labels">
+<thead><tr><th scope="col">方式</th><th scope="col">对象</th><th scope="col">操作</th><th scope="col">结果</th></tr></thead>
+<tbody><tr data-source-units="example-015"><td><strong>格式校验</strong></td><td>文本</td><td>检查必填字段是否存在，保留原始内容。</td><td>指出缺失字段，不据此判断内容真实性。</td></tr>
+<tr data-source-units="example-016"><td><strong>人工核对</strong></td><td>图表</td><td>对照来源检查数字、单位与必要条件。</td><td>记录具体疑点，无法确认时保留不确定性。</td></tr></tbody>
+</table></div>
 </section>
 BRIEF_EXAMPLES_END -->
