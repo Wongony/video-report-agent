@@ -45,6 +45,19 @@ def test_template_keeps_paper_white_and_canvas_light_gray():
     assert "--paper:#fff;--canvas:#f2f5f7;" in template
 
 
+def test_standard_navigation_lives_outside_paper_and_hides_for_long_image():
+    template = TEMPLATE.read_text()
+
+    assert ".report-nav{counter-reset:report-nav;position:fixed;" in template
+    assert "left:max(16px,calc(50vw - 625px));" in template
+    assert ".report-nav-title{display:block;" in template
+    assert ".report-nav>a::before{content:counter(report-nav,decimal-leading-zero);" in template
+    assert "@media(max-width:1260px){.report-nav{display:none}}" in template
+    assert "@media print{.report-nav{display:none}}" in template
+    assert '<nav class="report-nav" aria-label="章节导航">' in template
+    assert '<span class="report-nav-title">章节 · 2</span>' in template
+
+
 def test_bar_component_pins_block_display_on_fill():
     """柱图组件必须自带 display:block。
 
