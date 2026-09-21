@@ -140,3 +140,52 @@ def test_cache_write_failure_returns_usage_and_cleans_same_directory_temp(tmp_pa
     assert usage.cached_call_costs(tmp_path, {}, None) == expected
     assert len(set(seen)) == 2
     assert all(not path.exists() for path in seen)
+
+
+def priced_message(model, at="2026-09-21T09:00:00+08:00", **counts):
+    from datetime import datetime
+    return {"role": "assistant", "provider": "qwenai", "model": model,
+            "timestamp": datetime.fromisoformat(at).timestamp() * 1000,
+            "usage": {"input": 1000, "output": 100, "cacheRead": 10000,
+                      "cacheWrite": 0, **counts}}
+
+
+@pytest.mark.parametrize("at,factor", [
+    ("2026-09-21T08:59:59+08:00", 1), ("2026-09-21T09:00:00+08:00", 2),
+    ("2026-09-21T12:00:00+08:00", 1), ("2026-09-21T14:00:00+08:00", 2),
+    ("2026-09-21T18:00:00+08:00", 1), ("2026-09-20T10:00:00+08:00", 1),
+    ("2026-09-25T10:00:00+08:00", 1),
+])
+def test_qwenai_deepseek_peak_cache_and_holidays(at, factor):
+    result = usage.cny_cost(priced_message("deepseek-v4.1-flash", at))
+    assert result["total"] == pytest.approx(0.0024 * factor)
+    assert result["currency"] == "CNY"
+
+
+@pytest.mark.parametrize("prompt,rate", [(32768, .2), (32769, .6),
+                                        (262144, .6), (262145, 1.2)])
+def test_qwen_tiers_include_cached_prompt(prompt, rate):
+    result = usage.cny_cost(priced_message("qwen3.7-flash", input=prompt-10000))
+    assert result["input"] == pytest.approx((prompt-10000)*rate/1e6)
+    assert result["cacheRead"] == pytest.approx(10000*rate*.2/1e6)
+
+
+def test_qwen38_and_unknown_pricing():
+    assert usage.cny_cost(priced_message("qwen3.8-flash"))["total"] == pytest.approx(.00207)
+    m = priced_message("deepseek-v4.1-flash")
+    del m["timestamp"]
+    assert usage.cny_cost(m) is None
+    m["provider"] = "another-gateway"
+    assert usage.cny_cost(m) is None
+
+
+def test_cny_backfill_keeps_usd_separate_and_invalidates_old_cache(tmp_path):
+    m = priced_message("qwen3.8-flash")
+    m["usage"]["cost"] = {"total": 42}
+    (tmp_path / "pi.events.jsonl").write_text(
+        json.dumps({"type": "message_end", "message": m}) + '\n' + message(.12))
+    (tmp_path / "usage.json").write_text('{"version":1}')
+    result = usage.cached_call_costs(tmp_path, {}, None)
+    assert result["llm_cny_estimate"] == pytest.approx(.00207)
+    assert result["llm_usd_estimate"] == .12
+    assert result["llm_unpriced_calls"] == 0
