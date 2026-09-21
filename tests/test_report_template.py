@@ -49,13 +49,13 @@ def test_standard_navigation_lives_outside_paper_and_hides_for_long_image():
     template = TEMPLATE.read_text()
 
     assert ".report-nav{counter-reset:report-nav;position:fixed;" in template
-    assert "left:max(16px,calc(50vw - 625px));" in template
+    assert "left:calc(50vw - 724px);" in template
     assert ".report-nav-title{display:block;" in template
     assert ".report-nav>a::before{content:counter(report-nav,decimal-leading-zero);" in template
-    assert "@media(max-width:1260px){.report-nav{display:none}}" in template
+    assert "@media(max-width:1194px){.report-nav{display:none}}" in template
     assert "@media print{.report-nav{display:none}}" in template
     assert '<nav class="report-nav" aria-label="章节导航">' in template
-    assert '<span class="report-nav-title">章节 · 2</span>' in template
+    assert '<span class="report-nav-title">目录</span>' in template
 
 
 def test_bar_component_pins_block_display_on_fill():

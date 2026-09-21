@@ -5,12 +5,15 @@
 <meta name="viewport" content="width=900">
 <title>{{TITLE}}</title>
 <style>
+html{scroll-behavior:smooth;scroll-padding-top:24px}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 /* 稳定视觉语言；组件按内容关系选择，不设配额。 */
 :root{color-scheme:light;--paper:#fff;--canvas:#f2f5f7;--ink:#414b55;--heading:#242d35;--muted:#65717d;--accent:#c8562e;--orange:#ff8658;--line:#e9edf0;--blue:#23658b;--blue-wash:#edf7ff;--wash:#fff8e8}
 *{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:17px;line-height:1.85;-webkit-font-smoothing:antialiased}
 ::selection{background:#ffddc8;color:var(--heading)}.paper{max-width:860px;margin:24px auto;padding:48px 46px 30px;background:var(--paper);border-radius:8px;box-shadow:0 8px 30px #25384b0b;position:relative}.paper:before{content:"";position:absolute;inset:0 0 auto;height:4px;border-radius:8px 8px 0 0;background:linear-gradient(90deg,#ff9d64,#a9a6ba)}.paper:after{content:"";display:block;margin-top:20px;height:3px;background:linear-gradient(90deg,#ff9d64,#a9a6ba)}
 h1,h2,h3,p{margin:0}h1,h2,h3{color:var(--heading);text-wrap:pretty}h1{font-size:34px;line-height:1.45;font-weight:750;letter-spacing:0}.subtitle{text-wrap:balance;font-size:21px;font-weight:600;line-height:1.6;margin-top:12px;color:#4c5965}.lead{margin-top:20px;line-height:1.9}.meta{font-size:12px;color:var(--muted);margin-top:18px;line-height:1.8}.meta a{color:inherit;text-decoration:underline}
-.report-nav{counter-reset:report-nav;position:fixed;z-index:3;left:max(16px,calc(50vw - 625px));top:24px;width:174px;max-height:calc(100vh - 48px);overflow:auto;padding:14px;background:#fff;border-radius:12px;box-shadow:0 10px 28px #25384b17}.report-nav-title{display:block;padding:2px 9px 8px;color:var(--muted);font-size:12px;font-weight:650}.report-nav>a{counter-increment:report-nav;display:grid;grid-template-columns:2.3em minmax(0,1fr);gap:8px;align-items:baseline;padding:5px 9px;border-radius:7px;color:var(--heading);font-size:12px;line-height:1.35;text-decoration:none}.report-nav>a::before{content:counter(report-nav,decimal-leading-zero);color:#8b99a3;font-variant-numeric:tabular-nums}.report-nav>a:hover{background:var(--blue-wash);color:var(--blue)}
+.report-nav{counter-reset:report-nav;position:fixed;z-index:3;left:calc(50vw - 724px);top:32px;width:272px;max-height:calc(100vh - 64px);overflow:auto;padding:8px 8px 8px 0;background:transparent}.report-nav-title{display:block;padding:0 12px 20px;color:var(--heading);font-size:18px;font-weight:650}.report-nav>a{counter-increment:report-nav;display:grid;grid-template-columns:22px minmax(0,1fr);gap:12px;align-items:center;min-height:49px;margin-bottom:7px;padding:12px 16px;border:1px solid #e6ebee;border-left:4px solid transparent;border-radius:5px;background:#ffffffaa;color:#596873;font-size:15px;line-height:1.5;text-decoration:none}.report-nav>a::before{content:counter(report-nav,decimal-leading-zero);color:#93a0aa;font-size:12px;font-variant-numeric:tabular-nums}.report-nav>a:hover{background:var(--blue-wash);color:var(--blue)}.report-nav>a[aria-current="location"]{background:#fff;border-left-color:#dc8e65;transform:translateX(8px);box-shadow:0 6px 18px #263e5010;color:var(--ink);font-weight:650}
+
 section{margin-top:42px}section>h2{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px;font-size:24px;font-weight:750;line-height:1.55;padding-bottom:13px;border-bottom:1px solid var(--line);margin-bottom:21px}.num{display:inline-flex;align-items:center;justify-content:center;align-self:flex-start;flex-shrink:0;min-width:28px;height:28px;padding:0 5px;margin-top:5px;background:#424e58;border-radius:50%;color:white;font-size:16px;line-height:1;font-weight:650;font-variant-numeric:tabular-nums}h3{font-size:19px;font-weight:700;line-height:1.6;margin:27px 0 12px}h3:before{content:"";display:inline-block;width:8px;height:8px;margin-right:9px;margin-bottom:2px;border-radius:50%;background:var(--dot,var(--orange))}p+p{margin-top:14px}strong{font-weight:650;color:var(--heading)}ul,ol{padding-left:1.4em;margin:16px 0}li+li{margin-top:8px}li::marker{color:var(--accent)}a{color:var(--blue);text-underline-offset:4px}a:hover{color:var(--accent)}:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
 .section-title{flex:1 1 16em;min-width:0}.section-time{display:block;flex:0 1 auto;max-width:calc(100% - 40px);margin-left:auto;font-size:12px;font-weight:400;line-height:1.6;color:#666666;font-variant-numeric:tabular-nums;overflow-wrap:normal}
 .callout{margin:25px 0;padding:20px 24px;background:var(--blue-wash);border:0;border-radius:7px;color:var(--blue)}.callout h3{margin:0 0 9px;color:var(--blue);font-size:18px}.callout h3:before{display:none}.callout strong{color:inherit}.keyline{margin:25px 0;padding:20px 24px;background:var(--wash);border:0;border-radius:6px;line-height:1.85}.keyline p,.keyline blockquote{margin:0}.keyline cite{display:block;font-size:13px;font-style:normal;margin-top:10px;color:var(--muted)}
@@ -28,7 +31,8 @@ details{margin-top:42px;padding-top:20px;border-top:1px solid var(--line);font-s
 footer{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap}.footer-link,.footer-link:hover{color:inherit;text-decoration:underline}
 @media print{body{background:white}.paper{margin:0 auto;box-shadow:none}.callout,.card,.category,.tile{break-inside:avoid}h2,h3{break-after:avoid}}
 @media print{.categories-detailed>.category{break-inside:auto}.categories-detailed h4{break-after:avoid}}
-@media(max-width:1260px){.report-nav{display:none}}
+@media(min-width:1195px) and (max-width:1448px){.paper{margin-left:310px;margin-right:24px}.report-nav{left:24px}}
+@media(max-width:1194px){.report-nav{display:none}}
 @media print{.report-nav{display:none}}
 </style>
 </head>
@@ -43,7 +47,7 @@ footer{display:flex;align-items:baseline;justify-content:space-between;gap:16px;
 <!-- 独立使用：没有简介时删除此占位符，提供简介时按 Skill 填入原文折叠块。仅产品调用明确要求后处理时原样保留一次。 -->
 {{VIDEO_DESCRIPTION}}
 <!-- 默认直接进入内容，按有效信息量、关系复杂度和用户用途选择详略，时长仅为提示。短内容不设摘要与地图；主图、对照或步骤直接承担正文。长文确需导航时，BODY 开头可放下列结构；只写章节短标签，序号由模板生成，链接目标必须对应后文章节 id。桌面导航固定在纸面左侧页外，不占正文空间；窄屏、打印与 920px 长图自动隐藏，不另生成正文内回退目录。概览仅在有独立用途时出现，使用无编号自然中文标题，不放 span.num。多个正文大章节从 1 连续编号；单一单元或紧凑模块可省略编号。易读表达就地解释术语，精读保留必要依据，均不缩小字号或重复扩写。Profile 不进入可见页面。
-<nav class="report-nav" aria-label="章节导航"><span class="report-nav-title">章节 · 2</span><a href="#s1">第一个章节短标签</a><a href="#s2">第二个章节短标签</a></nav>
+<nav class="report-nav" aria-label="章节导航"><span class="report-nav-title">目录</span><a href="#s1">第一个章节短标签</a><a href="#s2">第二个章节短标签</a></nav>
 -->
 <!-- 共用视觉语法，所有 Profile 均可使用；以下为可选结构指引，不是待填的固定章节：
 Timeline / Turning Points：ol > li 按事件排列，每项写事件或阶段、变化与后果；转折可用 strong 标识。事件日期属于内容，不重复视频定位时间戳。
@@ -110,4 +114,26 @@ State / Relationship Map：使用 HTML/CSS 或内联 SVG 呈现带名称的对�
 {{BODY}}
 <details><summary>来源与处理说明</summary>{{SOURCES}}</details>
 <footer><span>视频报告·精读</span><a class="footer-link" href="https://vreport.tri4t.xyz/">vreport.tri4t.xyz</a></footer>
-</main></body></html>
+</main>
+<script>
+(() => {
+  const links = [...document.querySelectorAll('.report-nav>a')];
+  const entries = links.map(link => ({link, target:document.getElementById(link.hash.slice(1))})).filter(entry => entry.target);
+  if (!entries.length) return;
+  function updateCurrent() {
+    let current = entries[0];
+    for (const entry of entries) {
+      if (entry.target.getBoundingClientRect().top <= 160) current = entry;
+    }
+    if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2) current = entries[entries.length - 1];
+    for (const entry of entries) {
+      if (entry === current) entry.link.setAttribute('aria-current', 'location');
+      else entry.link.removeAttribute('aria-current');
+    }
+  }
+  window.addEventListener('scroll', updateCurrent, {passive:true});
+  window.addEventListener('resize', updateCurrent);
+  updateCurrent();
+})();
+</script>
+</body></html>
