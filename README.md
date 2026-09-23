@@ -188,3 +188,5 @@ The CLI reads `.env` from the working directory; existing process environment va
 The packaged Skill is the default. Callers can select a complete Skill directory with `PiRunner(skill_dir=...)` or the worker environment variable `VIDEO_REPORT_SKILL_DIR`.
 
 For public synthetic smoke inputs and optional live evaluation, see [evals/report-review](evals/report-review/README.md).
+
+[Project documentation](docs/README.md)

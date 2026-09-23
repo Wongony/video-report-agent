@@ -179,3 +179,5 @@ CLI 在项目运行目录读取 `.env`，已有进程环境变量优先；Pi 状
 默认使用包内共享 Skill；调用方可以通过 `PiRunner(skill_dir=...)` 或 worker 环境变量 `VIDEO_REPORT_SKILL_DIR` 选择完整 Skill 目录。
 
 公开合成 smoke 样例及可选真实模型调用说明见 [evals/report-review](evals/report-review/README.md)。
+
+[项目维护文档](docs/README.md)
