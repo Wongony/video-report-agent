@@ -114,13 +114,24 @@ def test_asr_is_fresh_on_cache_hit(tmp_path, monkeypatch):
     asr.write_text(json.dumps({
         "backend": "paraformer", "usage": {"content_duration_ms": 60000},
     }))
+    original_read = usage.read_object
+    asr_reads = []
+
+    def counted_read(path):
+        if path == asr:
+            asr_reads.append(path)
+        return original_read(path)
+
+    monkeypatch.setattr(usage, "read_object", counted_read)
     assert usage.cached_call_costs(tmp_path, {}, 0.0002)["asr_cny_estimate"] == 0.012
     assert usage.cached_call_costs(tmp_path, {}, 0.0004)["asr_cny_estimate"] == 0.024
+    assert len(asr_reads) == 1
     assert usage.cached_call_costs(
         tmp_path, {"transcript_reused_from": "old"}, 0.0004,
     )["asr_basis"] == "reused"
     asr.write_text('{"backend":"mlx"}')
     assert usage.cached_call_costs(tmp_path, {}, None)["asr_basis"] == "local"
+    assert len(asr_reads) == 2
     assert "asr_cny_estimate" not in json.loads((tmp_path / "usage.json").read_text())["llm"]
 
 

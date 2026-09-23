@@ -4,6 +4,7 @@ import json
 import math
 import os
 import tempfile
+from functools import lru_cache
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -118,8 +119,9 @@ def _llm_costs(run):
     }
 
 
-def _asr_costs(run, status, asr_rate):
-    asr = read_object(run / "asr.json")
+def _asr_costs(run, status, asr_rate, asr=None):
+    if asr is None:
+        asr = read_object(run / "asr.json")
     duration = asr.get("usage", {}).get("content_duration_ms")
     if status.get("transcript_reused_from"):
         asr_cost, asr_basis = 0, "reused"
@@ -149,6 +151,13 @@ def _signature(path):
         "device": stat.st_dev, "inode": stat.st_ino, "size": stat.st_size,
         "mtime_ns": stat.st_mtime_ns, "ctime_ns": stat.st_ctime_ns,
     }
+
+
+@lru_cache(maxsize=512)
+def _cached_asr_metadata(path, signature):
+    asr = read_object(path)
+    return {"backend": asr.get("backend"),
+            "usage": {"content_duration_ms": (asr.get("usage") or {}).get("content_duration_ms")}}
 
 
 def _valid_llm(value):
@@ -183,7 +192,7 @@ def _write_cache(path, data):
 
 
 def cached_call_costs(run, status, asr_rate):
-    """Reuse persisted LLM estimates until the log changes; always refresh ASR."""
+    """Reuse LLM estimates and ASR metadata; recalculate ASR cost for each call."""
     path = run / "pi.events.jsonl"
     signature = _signature(path)
     cache_path = run / "usage.json"
@@ -199,4 +208,7 @@ def cached_call_costs(run, status, asr_rate):
             _write_cache(cache_path, {
                 "version": USAGE_CACHE_VERSION, "source": signature, "llm": llm,
             })
-    return {**llm, **_asr_costs(run, status, asr_rate)}
+    asr_path = run / "asr.json"
+    signature = _signature(asr_path)
+    metadata = _cached_asr_metadata(asr_path, tuple(signature.items()) if signature else None)
+    return {**llm, **_asr_costs(run, status, asr_rate, metadata)}
