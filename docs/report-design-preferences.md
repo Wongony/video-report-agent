@@ -63,3 +63,9 @@
 精确关系通过代码计算再绘制，概念图不补造关系；单图过于复杂时拆分，关键关系无法核实时改用更简单的图、公式、文字或表格。绘图使用运行环境已有工具，不安装依赖、不新增默认视觉反馈循环。规则合并在 [Standard 模式](../src/video_report_agent/skills/video-report/modes/standard.md)的“图示的选择、绘制与检查”，模板只保留入口提示，替代此前针对抛物线的专项条目。本次范围仍为 Standard，不改变 Brief。
 
 证据边界：局部函数图已经计算及浏览器检查；通用规则和工具路径的检查不代表 Flash 真实生成质量已提升。未重生成历史报告或部署。
+
+## Standard：横向节点图的关系标签避让
+
+2026-09-24，用户采纳 `frp-label-clearance` 局部方案。三节点图的箭头间隙短于关系标签时，把标签放到节点上方留白，并保持与对应连线对齐；不让标签压住节点上沿。只按实际文字长度和图的留白定位，不把案例中的 SVG 坐标当成通用值。
+
+适用于 Standard 中横向节点图的同类拥挤情况。代价是标签离箭头稍远，需要用位置和顺序维持对应关系。已验证一份真实内容的局部小样和原/候选切换；未重生成历史报告，也未验证其他节点数量或线上后续生成效果。生成入口为 [Standard 模式规则](../src/video_report_agent/skills/video-report/modes/standard.md)与[模板图示提示](../src/video_report_agent/skills/video-report/assets/report-template.html)。
