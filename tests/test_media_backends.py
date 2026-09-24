@@ -36,6 +36,8 @@ def test_backend_default_and_explicit_precedence(env):
     with pytest.raises(ValueError, match="paraformer-v2"):
         resolve_media_config()
     assert resolve_media_config(asr_model="paraformer-v2")["asr_model"] == "paraformer-v2"
+    with pytest.raises(ValueError, match="Unsupported file ASR model"):
+        resolve_media_config(asr_model="paraformer-v1")
     env.setenv("ASR_MODEL", "paraformer-v2")
     with pytest.raises(ValueError, match="Whisper"):
         resolve_media_config("mlx")
@@ -94,6 +96,7 @@ def service(mode="ok", model="paraformer-v2"):
                 assert payload["parameters"] == {"channel_id": [0], "language_hints": ["zh"]}
             else:
                 assert payload["parameters"]["timestamp_alignment_enabled"] is True
+                assert payload["parameters"]["language_hints"] == ["zh", "en"]
             assert request.headers["X-DashScope-OssResourceResolve"] == "enable"
             if mode == "submit_timeout":
                 raise httpx.ReadTimeout("secret URL https://host/?signature=secret")
@@ -208,7 +211,6 @@ def test_diagnostic_redaction():
 @pytest.mark.parametrize(
     "model",
     [
-        "paraformer-v1",
         "paraformer-v2",
         "fun-asr",
         "fun-asr-2025-08-25",

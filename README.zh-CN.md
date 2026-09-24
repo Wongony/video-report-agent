@@ -140,7 +140,7 @@ ASR_MODEL=paraformer-v2
 DASHSCOPE_API_KEY=your-dashscope-api-key
 ```
 
-`paraformer` 后端支持 `paraformer-v1`、`paraformer-v2` 及代码中已适配的 Fun-ASR 文件转写模型。修改 `.env` 后，下次运行 CLI 命令时生效。云端 ASR 会上传音频，报告模型会接收用于报告生成的转写内容。
+`paraformer` 后端支持 `paraformer-v2` 及代码中已适配的 Fun-ASR 文件转写模型。修改 `.env` 后，下次运行 CLI 命令时生效。云端 ASR 会上传音频，报告模型会接收用于报告生成的转写内容。
 
 音频达到 60 分钟时，该后端会在中点前后 30 秒内寻找至少 250 毫秒的低音量停顿，拆成两个不重叠的片段并行转写。更短的音频或找不到合适停顿时保持单路，不硬切。句子和词时间戳会还原到原音频时间线，用量按两片合计。每份报告仍占一个任务槽，但可能同时发起两个云端 ASR 请求。
 

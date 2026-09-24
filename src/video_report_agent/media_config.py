@@ -9,7 +9,7 @@ DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/api/v1"
 OCR_MODEL = "PP-OCRv6-small-onnxruntime"
 PARAFORMER_PARAMETERS = {
     "channel_id": [0],
-    "language_hints": ["zh"],
+    "language_hints": ["zh", "en"],
     "timestamp_alignment_enabled": True,
     "disfluency_removal_enabled": False,
 }
@@ -25,12 +25,12 @@ FUN_ASR_MODELS = {
 
 
 def cloud_asr_parameters(model):
-    if model in {"paraformer-v1", "paraformer-v2"}:
+    if model == "paraformer-v2":
         return dict(PARAFORMER_PARAMETERS)
     if model in FUN_ASR_MODELS:
         return {"channel_id": [0], "language_hints": ["zh"]}
     raise ValueError(
-        f"Unsupported file ASR model: {model}; use paraformer-v1, paraformer-v2 "
+        f"Unsupported file ASR model: {model}; use paraformer-v2 "
         "or a supported Fun-ASR model (not realtime or Qwen-ASR)."
     )
 
