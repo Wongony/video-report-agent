@@ -24,6 +24,13 @@ Evaluation tooling and approved public smoke/benchmarks belong in Core. Raw real
 - When the user reviews alternatives and unambiguously selects one (for example, “D”), treat the selection as authorization to adopt it in the relevant generation Skill/template and record the preference. Do not merely switch the preview, ask for confirmation again, or wait for the word “adopt”. If the user explicitly asks only to preview or retain a sample, honor that scope. Ask only when the selected alternative or target mode is genuinely unresolved.
 - Adoption applies to future generation in the selected mode. Commits, pushes, deployments and regeneration of historical reports still require their own user authorization.
 
+## Report Skill maintenance
+
+- When changing the report Skill, review the entrypoint, selected mode and affected references together. Keep shared rules in the entrypoint, mode differences in modes, and only distinct editorial guidance in references; preserve progressive disclosure.
+- Before adding a rule, check whether an existing rule or template already covers it. Merge or replace that text first; remove superseded or duplicate rules in the same change. New behavior may justify growth, but a one-report workaround must not silently become a universal restriction.
+- Report what was added, merged or removed, and the before/after Markdown character totals. Preserve factual boundaries, mode contracts and adopted design choices; compare representative frozen-input reports when behavior changes, using the existing evaluation tools and proportional validation.
+- Weekly reviews propose specific deletions or replacements with reasons. They do not rewrite the Skill unattended, run paid generations, or adopt pending design suggestions; actionable findings require user selection. Keep review records under `.local/evals/`.
+
 ## Documentation Maintenance
 
 本项目维护以下文档，让开发者或 AI Agent 在没有历史聊天记录时，仍能理解项目当前状态、设计原因和下一步工作。
