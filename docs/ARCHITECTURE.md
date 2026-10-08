@@ -47,9 +47,9 @@ Pi consumer 等待 `agent_settled`，并要求最终 assistant 的 `stopReason =
 
 ## Pi 任务容器（2026-10-02 本地实现，未部署）
 
-`PiRunner` 默认使用 Docker；仅显式 `PI_TASK_ISOLATION=local` 或 `isolation="local"` 才在本机直接运行 Pi。隔离启动失败使任务失败，不回退。下载、ASR 和交付后的简介填充/PNG 仍在可信 Worker 中运行。
+`PiRunner` 默认直接使用宿主机的 Pi；只有显式设置 `PI_TASK_ISOLATION=docker` 或 `isolation="docker"` 才为每个任务启动 Docker 容器。选择隔离模式后若启动失败，任务直接失败，不回退到宿主机。下载、ASR 和交付后的简介填充/PNG 仍在可信 Worker 中运行。
 
-公开仓库的 `.env.example` 为本地 CLI 入门显式设置 `PI_TASK_ISOLATION=local`，复制后无需 Docker 或清理器；这不改变未配置时的代码默认值，也不改变托管服务 Public 模式强制使用 Docker 的策略。公开 Core 不包含托管服务的 Dockerfile 或 Compose 部署配置。
+公开仓库的 `.env.example` 为本地 CLI 入门显式设置 `PI_TASK_ISOLATION=local`，复制后无需 Docker 或清理器；这与代码默认值一致，也不改变托管服务 Public 模式强制使用 Docker 的策略。公开 Core 不包含托管服务的 Dockerfile 或 Compose 部署配置。
 
 每个任务仅挂载 `.generation/` 到 `/workspace`，材料为完整转写（含来源 ID）、来源/模式元数据、简介及选定 Skill/template。当前与备用模型由可信侧使用已安装 Pi 的离线目录解析；API-key 配置快照单独只读挂载，并复制到容器 tmpfs 中供 Pi 使用。不提供共享认证目录、OAuth、其他任务或调用方环境；不支持隔离模式中的 OAuth 模型。只有报告、assets、sessions、inspection 回传原 run，回传拒绝符号链接及非普通文件。
 

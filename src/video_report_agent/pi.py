@@ -168,7 +168,7 @@ class PiRunner:
         self.timeout = timeout
         self.review = os.getenv("REPORT_REVIEW", "0") == "1" if review is None else review
         self.model_recovery = model_recovery
-        self.isolation = isolation or os.getenv("PI_TASK_ISOLATION", "docker")
+        self.isolation = isolation or os.getenv("PI_TASK_ISOLATION", "local")
         if self.isolation not in {"docker", "local"}:
             raise ValueError("PI_TASK_ISOLATION must be docker or local")
 

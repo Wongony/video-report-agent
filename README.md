@@ -93,14 +93,14 @@ or a task cleaner. The supplied `.env.example` explicitly sets
 `PI_TASK_ISOLATION=local`; Pi's file and shell tools use your local user permissions.
 Standalone Skill use above is unchanged.
 
-For per-task Docker isolation, set `PI_TASK_ISOLATION=docker` and supply a compatible
-built application image via `PI_TASK_IMAGE`, a running Docker daemon, and an
-independently running healthy task cleaner with the same `PI_TASK_SCOPE`
-(default `video-report`). The runtime defaults to Docker when the isolation setting
-is omitted, and isolation failures do not fall back to local execution. Hosted
-Public mode always requires Docker. See [architecture](docs/ARCHITECTURE.md) for
-mounts, API-key requirements and limitations; the public Core does not include
-the hosted service's Dockerfile or Compose deployment.
+Per-task Docker isolation is opt-in: set `PI_TASK_ISOLATION=docker` and supply a
+compatible built application image via `PI_TASK_IMAGE`, a running Docker daemon,
+and an independently running healthy task cleaner with the same `PI_TASK_SCOPE`
+(default `video-report`). When isolation is selected, failures do not fall back to
+local execution. Hosted Public mode always requires Docker. See
+[architecture](docs/ARCHITECTURE.md) for mounts, API-key requirements and
+limitations; the public Core does not include the hosted service's Dockerfile or
+Compose deployment.
 
 Use the CLI to automate downloading, transcription, and report generation without a website server.
 
