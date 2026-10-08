@@ -18,6 +18,7 @@ section{margin-top:42px}section>h2{display:flex;flex-wrap:wrap;align-items:basel
 .section-title{flex:1 1 16em;min-width:0}.section-time{display:block;flex:0 1 auto;max-width:calc(100% - 40px);margin-left:auto;font-size:12px;font-weight:400;line-height:1.6;color:#666666;font-variant-numeric:tabular-nums;overflow-wrap:normal}
 .callout{margin:25px 0;padding:20px 24px;background:var(--blue-wash);border:0;border-radius:7px;color:var(--blue)}.callout h3{margin:0 0 9px;color:var(--blue);font-size:18px}.callout h3:before{display:none}.callout strong{color:inherit}.keyline{margin:25px 0;padding:20px 24px;background:var(--wash);border:0;border-radius:6px;line-height:1.85}.keyline p,.keyline blockquote{margin:0}.keyline cite{display:block;font-size:13px;font-style:normal;margin-top:10px;color:var(--muted)}
 .cards,.comparison,.categories{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;margin:26px 0}.card,.comparison>div,.category{min-width:0;padding:22px 24px;background:#fff;border-radius:9px;box-shadow:0 4px 16px #25384b12}.card h3,.comparison h3,.category h3{margin:0 0 11px;font-size:18px}.card p,.category p,.comparison p{font-size:16px;line-height:1.85}.categories{grid-template-columns:repeat(auto-fit,minmax(195px,1fr))}.category{border-top:3px solid var(--line);padding:18px 20px}.category ul{padding-left:1.2em}
+.categories.categories-stacked{grid-template-columns:minmax(0,1fr);gap:18px}.categories-stacked>.category{padding:18px 20px}.categories-stacked>.category ul{margin:10px 0 0}.categories-stacked>.category li+li{margin-top:5px}
 /* 长解释分类：复用 category，标题与列表圆点分层，允许自然篇幅。 */
 .categories.categories-detailed{grid-template-columns:minmax(0,1fr);gap:28px}.categories-detailed>.category{--category-tone:#2c6e83;padding:26px 28px;background:#fff;border:0;border-left:3px solid var(--category-tone);box-shadow:0 3px 16px #273c4910}.categories-detailed>.category>h3{font-size:22px;line-height:1.55;margin:0 0 12px}.categories-detailed>.category>h3:before{display:none}.categories-detailed .category-meta{font-size:14px;color:var(--muted);margin:0 0 16px}.categories-detailed h4{font-size:18px;font-weight:650;line-height:1.6;color:var(--heading);margin:24px 0 10px}.categories-detailed p,.categories-detailed li{font-size:17px;line-height:1.85}.categories-detailed>.category>:last-child{margin-bottom:0}
 .categories-detailed>.category[data-tone="rust"]{--category-tone:#a64c35}.categories-detailed>.category[data-tone="ochre"]{--category-tone:#75602b}.categories-detailed>.category[data-tone="plum"]{--category-tone:#77558a}.categories-detailed>.category[data-tone="sage"]{--category-tone:#456e51}.categories-detailed>.category[data-tone="rose"]{--category-tone:#8e516d}.categories-detailed .category-number{font-size:15px;font-weight:600;color:var(--category-tone);margin-right:12px;font-variant-numeric:tabular-nums}.categories-detailed li::marker{color:#8b959e}
@@ -60,10 +61,12 @@ State / Relationship Map：使用 HTML/CSS 或内联 SVG 呈现带名称的对�
 颜色按对象角色或关系性质使用，不按卡片奇偶或节点顺序轮换；同图的已有状态用实线、预计变化用虚线并就地标注其性质。
 这些结构直接承担内容；复用现有样式，不依赖外部脚本或图库，不要求每份报告使用全部语法。 -->
 <!-- 正文从语义组织生成：section/h2（多个大章节时用 span.num 放连续序号，后接 span 标题文本）、h3/p；可选 callout、keyline、cards/card、comparison、categories/category、ol.steps/li、stats、tiles/tile、bars/bar。不存在必填章节或必用组件。表格默认占满所在容器并自动分配列宽；短标签与短数值的小表可用 table-compact 居中收窄，不为凑满宽度制造大块空白。长说明先按语义分成短段或条目，仍影响跨行比较时移到表外；只有实际渲染出现拥挤才按内容设置 colgroup，不默认固定列宽。柱图仅用于正文必须看见的量级差异，不为每节数字各画一组。同一可比序列保持同色，需要突出来源支持的重点才加 bar-highlight，不按顺序轮换颜色。柱图按 div.bars > div.bar 组织，每个 bar 为 div.bar-head（span.bar-name + span.bar-value）加 span.bar-track>span.bar-fill；bar-fill 的 width 即占比，bar-track 占满整行宽度，同组共用刻度（最大项给 width:100%）。短项目用原生列表、表格或紧凑分栏，名称与数值同行；ol.steps 仅供需要展开解释的步骤选用，圆圈编号与布局可自行调整。p、li 或卡片用 data-source-units 绑定实际支持内容的 ID。 -->
-<!-- 逐项判断与依据示例：少量事项各有长依据与独立判断、主要逐项阅读时使用；需要跨项对齐比较共同字段时保留表格。不为填版式重复写“属实”“正确”等状态词；只有状态差异影响判断时才在正文就地说明。编号只作定位，不表示时间或排名。真实内容按来源替换。
+<!-- 并列类别内容长短悬殊、主要逐项阅读时，在普通 .categories 上加 .categories-stacked；共同字段需要横向对照时仍用并排卡或表格。 -->
+<!-- 以下示例的内容与编号均为合成展示，生成时逐处替换为实际来源的原生 ID，不沿用样例映射。
+逐项判断与依据示例：少量事项各有长依据与独立判断、主要逐项阅读时使用；需要跨项对齐比较共同字段时保留表格。不为填版式重复写“属实”“正确”等状态词；只有状态差异影响判断时才在正文就地说明。编号只作定位，不表示时间或排名。真实内容按来源替换。
 <ol class="evidence-rows">
-  <li data-source-units="u1"><div class="evidence-topic"><h3>事项甲</h3></div><div class="evidence-body"><p class="evidence-judgment">影响集中在交付时间</p><p class="evidence-detail">保留来源支持的时间、条件和影响范围。</p></div></li>
-  <li data-source-units="u2"><div class="evidence-topic"><h3>事项乙</h3></div><div class="evidence-body"><p class="evidence-judgment">目前不能确定影响程度</p><p class="evidence-detail">说明已有依据及缺失的信息，不补造结论。</p></div></li>
+  <li data-source-units="unit-000001"><div class="evidence-topic"><h3>事项甲</h3></div><div class="evidence-body"><p class="evidence-judgment">影响集中在交付时间</p><p class="evidence-detail">保留来源支持的时间、条件和影响范围。</p></div></li>
+  <li data-source-units="unit-000002"><div class="evidence-topic"><h3>事项乙</h3></div><div class="evidence-body"><p class="evidence-judgment">目前不能确定影响程度</p><p class="evidence-detail">说明已有依据及缺失的信息，不补造结论。</p></div></li>
 </ol>
 -->
 <!-- 分类详解示例：仅用于需要展开的并列类型，数量和字段按来源增减；短分类沿用普通 categories。
@@ -71,15 +74,15 @@ State / Relationship Map：使用 HTML/CSS 或内联 SVG 呈现带名称的对�
 类型标题可设唯一 id 供长文导航定位；不另加重复总览，不嵌套卡片。标题、概括和要点分别绑定实际支持它们的来源 ID。
 <div class="categories categories-detailed">
   <article class="category" data-tone="rust">
-    <h3 id="category-a" data-source-units="u1">类型名称</h3>
-    <p class="category-meta" data-source-units="u1">代表对象或适用范围（有必要时保留）</p>
-    <p data-source-units="u1">来源支持的核心特点与必要限定。</p>
+    <h3 id="category-a" data-source-units="unit-000001">类型名称</h3>
+    <p class="category-meta" data-source-units="unit-000001">代表对象或适用范围（有必要时保留）</p>
+    <p data-source-units="unit-000001">来源支持的核心特点与必要限定。</p>
     <ul>
-      <li data-source-units="u2"><strong>关键特点</strong> — 对应依据与解释。</li>
-      <li data-source-units="u3"><strong>成立条件</strong> — 来源实际说明的条件。</li>
+      <li data-source-units="unit-000002"><strong>关键特点</strong> — 对应依据与解释。</li>
+      <li data-source-units="unit-000003"><strong>成立条件</strong> — 来源实际说明的条件。</li>
     </ul>
     <h4>需要独立展开的对象或案例（按需保留）</h4>
-    <p data-source-units="u4">保留理解所需的机制、例子或转折。</p>
+    <p data-source-units="unit-000004">保留理解所需的机制、例子或转折。</p>
   </article>
 </div>
 -->

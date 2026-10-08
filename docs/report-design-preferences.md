@@ -30,6 +30,12 @@
 
 生成入口：[Standard 规则](../src/video_report_agent/skills/video-report/modes/standard.md)与[唯一 Standard 模板](../src/video_report_agent/skills/video-report/assets/report-template.html)。已在原模板组件上下文中检查桌面效果；不代表已重新生成或审查所有历史报告。
 
+## Standard：长短悬殊的并列类别卡
+
+2026-10-03，用户采纳 `uneven-chapter-cards` 的上下自然高度方案。并列类别条目数量或说明长度差距大、读者主要逐项阅读时，可用 `.categories.categories-stacked` 保留两张卡的顺序和全部必要限定，避免等高并排留下大片空白、长项被窄列挤碎。需要共同字段横向比较时，仍用并排卡或表格。
+
+这是有条件的局部选择，不要求所有分类卡单列。原报告只有 920px 长图；候选小样先前已在本地桌面场景检查。本次实际模板的浏览器检查被运行环境阻止，仅完成静态检查与相关模板测试；后续生成的跨内容效果尚未验证。不重生成历史报告。
+
 ## Standard：左侧页外章节导航
 
 2026-09-20，用户在 `balanced-section-nav` 四方向中明确选择 D，并指定侧栏放在纸面左侧；长图不截导航，以便内容开门见山并保持正常长图宽度。
