@@ -21,6 +21,8 @@
 
 生成先尝试完整转写复用，否则检查媒体与 ASR 复用；随后构建完整转写供 Agent 阅读。单任务主链路顺序执行，长音频 ASR 的两段并发不改变单 Agent 架构。没有向量检索或多 Agent 调度。
 
+下载由 `ingest.py` 监督 `download_worker.py` 中的 yt-dlp，最多两次尝试、合计 120 秒运行预算，随后做有限进程清理。每 30 秒检查进度：最近 10 秒无进展，或未到 90% 且 ETA 不在 30 秒以内时，首轮中断并重新解析，优先选择平台返回的不同备用 URL；无备用则使用新解析的主 URL。第二轮不再增加重试。保持断点续传和外层 Worker 进程组，关闭 yt-dlp 内部额外重试，网络等待上限 10 秒。`download.log` 持续保留进度与切换原因，不打印签名媒体 URL。120 秒是体验预算，不是所有视频都能在此范围内完成的保证。
+
 ## 任务数据与接口
 
 `create_run` 登记数据库中的输入与初始状态，再导出任务材料；独立运行默认 `runs/state.sqlite3`，嵌入调用显式传 `database_path`。受监督 execution 原子认领 run，并把数据库路径与执行 ID 传给可信 Python Worker。调用方持有业务事务时，Core 方法使用同一个 `db`，不另开连接或提交；提交后才导出与派发。详见 [SQLite 存储](sqlite-storage.md)。
@@ -36,6 +38,8 @@ ASR 片段编号保留原始来源位置，过滤空白或无效片段后允许�
 当调用方为单个任务提供 `model_recovery` 时，PiRunner 额外写入 `model-attempts.jsonl`：逐次追加模型请求的 provider/model、时间、结束原因、可用用量和供应商 request ID，不复制请求正文。可恢复的请求错误会在同一个 Pi 进程和 session 中通过 `set_model` 与新 prompt 续跑；这条路径用任务级 Pi 配置关闭 Pi Agent / Provider 自动重试，不修改共享设置。没有 recovery policy 的 CLI/Local 调用保持原行为。
 
 连接错误 `Connection error.` 属可恢复的瞬态故障。初始模型的慢速瞬态故障仍直接切备用；备用模型首次发生瞬态故障（包括慢失败）或首次失败为输出检查拒绝时，可在该模型续试一次。所有续试共用调用方的恢复次数和剩余时间预算，切换后不返回初始模型；输入检查拒绝、未知错误等未覆盖路径不会因还有预算就自动重试。失败次数按模型累计，不因中间成功的工具调用轮次清零。
+
+调用方可另提供 `model_recovery.final_fallback`。它不改变初始/备用顺序；在明确的输入拒绝、输出拒绝或瞬态错误下，原策略无可用动作或已用完为原两模型预留的恢复机会时，切到最终模型。总预算最后一次恢复留给它（无显式次数配置时三模型默认 3、两模型默认 2）。最终模型可正常进行多轮工具调用，但再失败不重试、不回切；剩余总时间不足 120 秒时仍不会接管。认证/额度、非法请求、未知错误不因此自动恢复。结构化 `content_filter` 归为输出检查拒绝，明确的供应商 `internal_error` 归为瞬态故障，单独 HTTP 426 不作此推断。`task_result.recovery_stop_reason` 区分策略、次数、剩余时间和最终模型失败；取消及外层异常仍看 `failure_category`。
 
 Agent 日志默认保留每轮结束消息与 usage、工具参数/结果、生命周期和错误，丢弃流式碎片、重复结束快照与原始推理正文。`request_trace.ts` 使用 Pi 的 `before_provider_request` 与非空 `thinking_delta` / `text_delta` / `toolcall_delta` 记录请求起点、首个有效响应和单调时钟延迟；经 RPC notification 传回 Python，不记录请求凭证或完整 payload。该值包含客户端、网络与供应商等待，不代表供应商纯推理时间；未提供这些钩子的历史日志保持未知。
 
@@ -53,7 +57,7 @@ Pi consumer 等待 `agent_settled`，并要求最终 assistant 的 `stopReason =
 
 公开仓库的 `.env.example` 为本地 CLI 入门显式设置 `PI_TASK_ISOLATION=local`，复制后无需 Docker 或清理器；这与代码默认值一致，也不改变托管服务 Public 模式强制使用 Docker 的策略。公开 Core 不包含托管服务的 Dockerfile 或 Compose 部署配置。
 
-每个任务仅挂载 `.generation/` 到 `/workspace`，材料为完整转写（含来源 ID）、来源/模式元数据、简介及选定 Skill/template。当前与备用模型由可信侧使用已安装 Pi 的离线目录解析；API-key 配置快照单独只读挂载，并复制到容器 tmpfs 中供 Pi 使用。不提供共享认证目录、OAuth、其他任务或调用方环境；不支持隔离模式中的 OAuth 模型。只有报告、assets、sessions、inspection 回传原 run，回传拒绝符号链接及非普通文件。
+每个任务仅挂载 `.generation/` 到 `/workspace`，材料为完整转写（含来源 ID）、来源/模式元数据、简介及选定 Skill/template。当前、备用及可选最终模型由可信侧使用已安装 Pi 的离线目录解析；API-key 配置快照单独只读挂载，并复制到容器 tmpfs 中供 Pi 使用。不提供共享认证目录、OAuth、其他任务或调用方环境；不支持隔离模式中的 OAuth 模型。只有报告、assets、sessions、inspection 回传原 run，回传拒绝符号链接及非普通文件。
 
 容器复用调用方配置的 `PI_TASK_IMAGE`（默认 `video-report-agent:linux-amd64`），以控制端的非 root UID/GID 运行；只读根文件系统、无 capabilities、no-new-privileges、受限 tmpfs，默认 2 GiB 内存、2 CPU、256 PID。每个任务创建独立 bridge，无端口发布、host PID/IPC/network 或 Docker socket。任务 bridge 与服务及其他任务分离；这没有实现所有宿主机/局域网私网出站封锁。模型凭证可被任务 bash 读取，是当前保留风险。
 

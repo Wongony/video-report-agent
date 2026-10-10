@@ -73,15 +73,17 @@ def _provider_failure(message: dict) -> tuple[str, str | None, int | None]:
 
     if message.get("stopReason") != "error":
         return "agent_error", provider_code, http_status
-    if message.get("provider") == "qwenai":
-        if "output data may contain inappropriate content" in lowered:
+    if (
+        message.get("rawStopReason") == "content_filter"
+        or "output data may contain inappropriate content" in lowered
+    ):
+        return "output_content_rejected", provider_code, http_status
+    if provider_code and provider_code.lower() == "data_inspection_failed":
+        if re.search(r"\boutput\b", lowered):
             return "output_content_rejected", provider_code, http_status
-        if provider_code and provider_code.lower() == "data_inspection_failed":
-            if re.search(r"\boutput\b", lowered):
-                return "output_content_rejected", provider_code, http_status
-            if re.search(r"\binput\b", lowered):
-                return "input_content_rejected", provider_code, http_status
-            return "unknown_provider_failure", provider_code, http_status
+        if re.search(r"\binput\b", lowered):
+            return "input_content_rejected", provider_code, http_status
+        return "unknown_provider_failure", provider_code, http_status
     if (
         http_status in {401, 402, 403}
         or any(term in lowered for term in (
@@ -93,6 +95,7 @@ def _provider_failure(message: dict) -> tuple[str, str | None, int | None]:
     if (
         http_status in {408, 409, 429}
         or (http_status is not None and http_status >= 500)
+        or provider_code == "internal_error"
         or any(term in lowered for term in (
             "terminated", "stream ended without finish_reason", "timed out", "timeout",
             "responses stream ended before a terminal response event",
@@ -228,7 +231,7 @@ class PiRunner:
         on_initial = current_key == initial_key
         alternate_key = (alternate.get("provider"), alternate.get("model"))
         if category == "input_content_rejected":
-            if on_initial and current.get("provider") == "qwenai" and alternate_key != current_key:
+            if on_initial and alternate_key != current_key:
                 return "switch_model", alternate
             return None
         if category == "output_content_rejected":
@@ -258,9 +261,9 @@ class PiRunner:
                 selections = [{"provider": self.provider, "model": self.model,
                                "api_key": self.api_key}]
                 if self.model_recovery:
-                    alternate = self.model_recovery.get("alternate")
-                    if alternate:
-                        selections.append(alternate)
+                    for role in ("alternate", "final_fallback"):
+                        if self.model_recovery.get(role):
+                            selections.append(self.model_recovery[role])
                 snapshot_models(config, PI_AGENT_DIR, selections)
                 if self.model_recovery:
                     settings = {
@@ -425,6 +428,7 @@ class PiRunner:
                 "initial": selected,
                 "current": selected.copy(),
                 "alternate": dict(self.model_recovery.get("alternate") or {}),
+                "final_fallback": dict(self.model_recovery.get("final_fallback") or {}),
                 "recovery_scheduled": 0,
                 "recovery_count": 0,
                 "request_count": 0,
@@ -537,6 +541,7 @@ class PiRunner:
             "pi_agent_retries": 0,
             "provider_retries": 0,
             "failure_category": failure_category,
+            "recovery_stop_reason": state.get("recovery_stop_reason"),
             "elapsed_seconds": max(0, time.time() - state["started_at"]),
         })
 
@@ -635,7 +640,8 @@ class PiRunner:
                         pending_recovery = None
                     pair = (active_request["provider"], active_request["model"])
                     label = next((item.get("name") for item in (
-                        model_state["initial"], model_state["alternate"]
+                        model_state["initial"], model_state["alternate"],
+                        model_state.get("final_fallback") or {},
                     ) if (item.get("provider"), item.get("model")) == pair), None)
                     active_request["model_name"] = label
                     self._record_model_event(workspace, {
@@ -727,8 +733,32 @@ class PiRunner:
                         category, current, model_state["initial"], model_state["alternate"],
                         failure_count, request_seconds,
                     )
-                    max_recoveries = int(model_recovery.get("max_additional_attempts", 2))
+                    final = model_state.get("final_fallback") or {}
+                    on_final = bool(final) and (current.get("provider"), current.get("model")) == (
+                        final.get("provider"), final.get("model")
+                    )
+                    max_recoveries = int(model_recovery.get(
+                        "max_additional_attempts", 3 if final else 2,
+                    ))
+                    # Reserve the last recovery for the configured final provider.
+                    # It receives one attempt, never routes back or retries indefinitely.
+                    if on_final:
+                        recovery = None
+                    elif final and category in {
+                        "input_content_rejected", "output_content_rejected",
+                        "transient_provider_failure",
+                    } and (
+                        recovery is None
+                        or model_state["recovery_scheduled"] >= max_recoveries - 1
+                    ):
+                        recovery = "switch_model", final
                     if recovery is None or model_state["recovery_scheduled"] >= max_recoveries:
+                        model_state["recovery_stop_reason"] = (
+                            "final_fallback_failed" if on_final
+                            else "recovery_attempt_budget_exhausted"
+                            if model_state["recovery_scheduled"] >= max_recoveries
+                            else "no_recovery_strategy"
+                        )
                         raise PiError(
                             "EXTERNAL_MODEL_FAILURE", _safe_failure_message(category),
                             failure_category=category,
@@ -743,6 +773,7 @@ class PiRunner:
                         "min_remaining_seconds", PUBLIC_MIN_RECOVERY_SECONDS
                     ))
                     if remaining < min_remaining:
+                        model_state["recovery_stop_reason"] = "recovery_time_budget_exhausted"
                         raise PiError(
                             "EXTERNAL_MODEL_FAILURE",
                             "模型请求失败，剩余任务时间不足以进行一次有效恢复；本任务未完成。",

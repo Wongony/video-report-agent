@@ -309,6 +309,16 @@ def test_fallback_failure_gets_one_bounded_retry(
      ("transient_provider_failure", None, None)),
     ({"provider": "heyroute ", "stopReason": "error", "errorMessage": "Connection error."},
      ("transient_provider_failure", None, None)),
+    ({"provider": "deepseek", "stopReason": "error", "rawStopReason": "content_filter"},
+     ("output_content_rejected", None, None)),
+    ({"provider": "deepseek", "stopReason": "error",
+      "errorMessage": "Output data may contain inappropriate content."},
+     ("output_content_rejected", None, None)),
+    ({"provider": "heyroute ", "stopReason": "error",
+      "errorMessage": '426 {"error":{"code":"internal_error"}}'},
+     ("transient_provider_failure", "internal_error", 426)),
+    ({"provider": "heyroute ", "stopReason": "error", "errorMessage": "HTTP 426"},
+     ("unknown_provider_failure", None, 426)),
     ({"provider": "qwenai", "stopReason": "error",
       "errorMessage": "HTTP 401 invalid_api_key"},
      ("auth_or_quota_failure", "invalid_api_key", 401)),
@@ -318,6 +328,88 @@ def test_fallback_failure_gets_one_bounded_retry(
 ])
 def test_public_provider_failure_classification(message, expected):
     assert _provider_failure(message) == expected
+
+
+@pytest.mark.parametrize("path", [
+    "retry-primary", "retry-alternate", "input-rejected", "qwen-primary",
+])
+@pytest.mark.parametrize("final_stop", ["stop", "error"])
+def test_final_fallback_has_reserved_attempt_and_never_routes_back(tmp_path, path, final_stop):
+    primary = ("heyroute ", "grok-4.7")
+    alternate = ("qwenai", "deepseek-v4.1-flash")
+    final = ("deepseek", "deepseek-flash")
+    if path == "qwen-primary":
+        primary, alternate = alternate, primary
+    scenarios = {
+        "retry-primary": [
+            (primary, "Connection error.", 2), (primary, "Connection error.", 2),
+            (alternate, "Output data may contain inappropriate content.", 42),
+        ],
+        "retry-alternate": [
+            (primary, "HTTP 503 terminated", 172),
+            (alternate, "Output data may contain inappropriate content.", 42),
+            (alternate, "Output data may contain inappropriate content.", 42),
+        ],
+        "input-rejected": [
+            (primary, "HTTP 503 terminated", 172),
+            (alternate, "HTTP 400 data_inspection_failed: input data", 2),
+        ],
+        "qwen-primary": [
+            (primary, "HTTP 400 data_inspection_failed: input data", 2),
+            (alternate, "HTTP 503 terminated", 169),
+            (alternate, "HTTP 503 terminated", 169),
+        ],
+    }
+    sequence = scenarios[path]
+    steps = [provider_attempt(*pair, i + 1, stop_reason="error", error=error, age=age)
+             for i, (pair, error, age) in enumerate(sequence)]
+    steps.append(provider_attempt(*final, len(steps) + 1, stop_reason=final_stop,
+                                  error="HTTP 503 unavailable" if final_stop == "error" else None))
+    process = RecoveryProcess(steps)
+    def selection(pair):
+        return {"provider": pair[0], "model": pair[1], "thinking": "low"}
+
+    recovery = {"selected": selection(primary), "alternate": selection(alternate),
+                "final_fallback": selection(final), "max_additional_attempts": 3}
+    state = {"initial": recovery["selected"], "current": recovery["selected"].copy(),
+             "alternate": recovery["alternate"], "final_fallback": recovery["final_fallback"],
+             "recovery_scheduled": 0, "recovery_count": 0, "request_count": 0}
+    consume = PiRunner(model_recovery=recovery)._consume(
+        process, tmp_path, "generate report", model_recovery=recovery,
+        model_state=state, deadline=time.monotonic() + 900,
+    )
+    if final_stop == "stop":
+        assert asyncio.run(consume) == selection(final)
+    else:
+        with pytest.raises(PiError):
+            asyncio.run(consume)
+        assert state["recovery_stop_reason"] == "final_fallback_failed"
+    assert len(process.prompts) == len(sequence) + 1
+    assert [(c["provider"], c["modelId"]) for c in process.model_commands] == [alternate, final]
+    assert state["recovery_count"] == len(sequence) <= 3
+
+
+def test_docker_recovery_snapshots_final_provider(tmp_path, monkeypatch):
+    from video_report_agent import pi
+
+    (tmp_path / "transcript.md").write_text("synthetic transcript")
+    monkeypatch.setattr(pi, "PI_AGENT_DIR", tmp_path / "shared-pi")
+    selections = []
+
+    def snapshot(directory, agent_dir, models):
+        selections.extend(models)
+        directory.mkdir()
+
+    async def no_provider_call(self, workspace, **kwargs):
+        return workspace / "report.html"
+
+    monkeypatch.setattr(pi, "snapshot_models", snapshot)
+    monkeypatch.setattr(PiRunner, "_run", no_provider_call)
+    recovery = {"alternate": {"provider": "alternate", "model": "fixture"},
+                "final_fallback": {"provider": "final", "model": "fixture"}}
+    asyncio.run(PiRunner(provider="primary", model="fixture", api_key="FAKE",
+                        model_recovery=recovery, isolation="docker").run(tmp_path))
+    assert [item["provider"] for item in selections] == ["primary", "alternate", "final"]
 
 
 @pytest.mark.parametrize("category,count,seconds,expected_action", [
@@ -333,6 +425,14 @@ def test_public_recovery_action_matrix(category, count, seconds, expected_action
     alternate = {"provider": "heyroute ", "model": "grok-4.7"}
     selected = PiRunner._select_recovery(category, initial, initial, alternate, count, seconds)
     assert (selected[0] if selected else None) == expected_action
+
+
+def test_explicit_input_rejection_can_switch_non_qwen_initial_model():
+    initial = {"provider": "heyroute ", "model": "grok-4.7"}
+    alternate = {"provider": "qwenai", "model": "deepseek-v4.1-flash"}
+    assert PiRunner._select_recovery(
+        "input_content_rejected", initial, initial, alternate, 1, 2,
+    ) == ("switch_model", alternate)
 
 
 @pytest.mark.parametrize("cancelled,remaining,expected", [

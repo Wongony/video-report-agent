@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import json
 import math
+import queue
 import re
 import shutil
 import subprocess
+import sys
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -19,6 +23,10 @@ _BVID_PATTERN = re.compile(r"BV[0-9A-Za-z]{10}")
 _PAGE_PATTERN = re.compile(r"[0-9]+")
 _SOURCE_NAME = "source"
 MAX_VIDEO_SECONDS = 5 * 60 * 60
+DOWNLOAD_CHECK_SECONDS = 30
+DOWNLOAD_STALL_SECONDS = 10
+DOWNLOAD_BUDGET_SECONDS = 120
+_PROGRESS_PREFIX = "vreport-progress:"
 
 CommandRunner = Callable[..., Any]
 
@@ -180,18 +188,138 @@ def probe_bilibili_video(
     }
 
 
-def _run_command(command: list[str], runner: CommandRunner | None, *, category: str) -> Any:
-    active_runner = runner or subprocess.run
-    try:
-        return active_runner(
-            command,
-            capture_output=True,
-            text=True,
-            check=False,
-            shell=False,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise UrlIngestError(category, "external command could not be started") from exc
+def _safe_download_line(line: str) -> str:
+    return re.sub(r"https?://[^\s\"'<>]+", "[media-url]", line)
+
+
+def _download_needs_switch(progress: dict, now: float, last_change: float) -> bool:
+    if progress.get("status") == "finished":
+        return False
+    if now - last_change >= DOWNLOAD_STALL_SECONDS:
+        return True
+    downloaded = progress.get("downloaded_bytes") or 0
+    total = progress.get("total_bytes") or progress.get("total_bytes_estimate") or 0
+    downloaded = downloaded if isinstance(downloaded, (int, float)) else 0
+    total = total if isinstance(total, (int, float)) else 0
+    eta = progress.get("eta")
+    return not ((total and downloaded / total >= 0.9) or (
+        isinstance(eta, (int, float)) and 0 <= eta <= DOWNLOAD_CHECK_SECONDS
+    ))
+
+
+def _run_download(command: list[str], run_dir: Path, runner: CommandRunner | None) -> Any:
+    # The injected runner is retained for callers testing output validation.
+    if runner is not None:
+        try:
+            result = runner(command, capture_output=True, text=True, check=False,
+                            shell=False, timeout=DOWNLOAD_BUDGET_SECONDS)
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise UrlIngestError(
+                "DOWNLOAD_ERROR", "视频下载失败，请稍后重试或联系管理员。"
+            ) from exc
+        (run_dir / "download.log").write_text(_safe_download_line(str(result.stderr)))
+        return result
+
+    deadline = time.monotonic() + DOWNLOAD_BUDGET_SECONDS
+    with (run_dir / "download.log").open("w", encoding="utf-8", buffering=1) as log:
+        for attempt in range(2):
+            if time.monotonic() >= deadline:
+                break
+            mode = "backup-or-reparse" if attempt else "primary"
+            log.write(f"[download] attempt={attempt + 1} mode={mode}\n")
+            worker = [sys.executable, "-m", "video_report_agent.download_worker",
+                      str(attempt), *command[1:]]
+            lines: queue.Queue = queue.Queue()
+            stdout, stderr = [], []
+            progress = {}
+            last_bytes = 0
+            started = last_change = time.monotonic()
+            next_check = started + DOWNLOAD_CHECK_SECONDS
+            reason = None
+            try:
+                process = subprocess.Popen(worker, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                           text=True, bufsize=1)
+            except OSError as exc:
+                raise UrlIngestError(
+                    "DOWNLOAD_ERROR", "视频下载暂不可用，请稍后重试或联系管理员。"
+                ) from exc
+
+            def read_lines(pipe, stream):
+                for line in pipe:
+                    lines.put((stream, line))
+                lines.put((stream, None))
+
+            threads = [threading.Thread(target=read_lines, args=(pipe, stream), daemon=True)
+                       for pipe, stream in ((process.stdout, "stdout"), (process.stderr, "stderr"))]
+            for thread in threads:
+                thread.start()
+            closed = 0
+            try:
+                while closed < 2 or process.poll() is None:
+                    now = time.monotonic()
+                    if now >= deadline:
+                        reason = "total-budget-exhausted"
+                        break
+                    if now >= next_check:
+                        switch = _download_needs_switch(progress, now, last_change)
+                        action = "switch" if switch and attempt == 0 else "continue"
+                        log.write(
+                            f"[download] checkpoint attempt={attempt + 1} action={action}\n"
+                        )
+                        if switch and attempt == 0:
+                            reason = "slow-or-stalled"
+                            break
+                        next_check = now + DOWNLOAD_CHECK_SECONDS
+                    try:
+                        stream, line = lines.get(timeout=min(0.1, max(0.001, deadline - now)))
+                    except queue.Empty:
+                        continue
+                    if line is None:
+                        closed += 1
+                        continue
+                    if line.startswith(_PROGRESS_PREFIX):
+                        try:
+                            progress = json.loads(line[len(_PROGRESS_PREFIX):])
+                        except ValueError:
+                            continue
+                        downloaded = progress.get("downloaded_bytes") or 0
+                        if downloaded != last_bytes or progress.get("status") == "finished":
+                            last_bytes, last_change = downloaded, now
+                        # This template contains only status, bytes, ETA and speed.
+                        log.write(line)
+                    else:
+                        safe = _safe_download_line(line)
+                        (stdout if stream == "stdout" else stderr).append(safe)
+                        if stream == "stderr":
+                            log.write(safe)
+            finally:
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                for thread in threads:
+                    thread.join(timeout=1)
+                process.stdout.close()
+                process.stderr.close()
+            completed = subprocess.CompletedProcess(worker, process.returncode,
+                                                    "".join(stdout), "".join(stderr))
+            log.write(
+                f"[download] attempt={attempt + 1} returncode={process.returncode} "
+                f"reason={reason or 'exited'}\n"
+            )
+            if reason == "total-budget-exhausted":
+                break
+            if reason is None and completed.returncode in (0, 101):
+                return completed
+            if attempt == 0:
+                log.write("[download] retry=1 use-platform-backup-or-reparse\n")
+            else:
+                return completed
+        log.write("[download] stopped reason=total-budget-exhausted\n")
+    raise UrlIngestError("DOWNLOAD_ERROR", "视频下载超时，请稍后重试；如果反复失败，请联系管理员。")
 
 
 def _inside(path: Path, root: Path, *, category: str, message: str) -> Path:
@@ -278,6 +406,15 @@ def download_bilibili_video(
         "--write-info-json",
         "--print",
         "after_move:filepath",
+        "--progress", "--newline", "--progress-delta", "2",
+        "--progress-template",
+        'download:vreport-progress:{"status":%(progress.status)j,'
+        '"downloaded_bytes":%(progress.downloaded_bytes|null)j,'
+        '"total_bytes":%(progress.total_bytes|null)j,'
+        '"total_bytes_estimate":%(progress.total_bytes_estimate|null)j,'
+        '"eta":%(progress.eta|null)j,"speed":%(progress.speed|null)j}',
+        "--socket-timeout", "10", "--retries", "0", "--fragment-retries", "0",
+        "--extractor-retries", "0",
     ]
     if audio_only:
         command.extend(["-f", "bestaudio"])
@@ -286,8 +423,7 @@ def download_bilibili_video(
     if request_subtitles:
         command.extend(["--write-subs", "--sub-langs", "all", "--sub-format", "srt/vtt/ass/best"])
     command.append(source.canonical_url)
-    completed = _run_command(command, runner, category="DOWNLOAD_ERROR")
-    (run_dir / "download.log").write_text(str(getattr(completed, "stderr", "")))
+    completed = _run_download(command, run_dir, runner)
     if getattr(completed, "returncode", None) == 101 or (
         not str(getattr(completed, "stdout", "")).strip()
         and "does not pass filter" in str(getattr(completed, "stderr", ""))
@@ -300,9 +436,12 @@ def download_bilibili_video(
         if "HTTP Error 412" in str(getattr(completed, "stderr", "")):
             raise UrlIngestError(
                 "DOWNLOAD_ERROR",
-                "视频链接已识别，但 Bilibili 拒绝了下载请求（HTTP 412）。请稍后重试。",
+                "视频链接已识别，但 Bilibili 拒绝了下载请求（HTTP 412）。"
+                "请稍后重试；如果反复失败，请联系管理员。",
             )
-        raise UrlIngestError("DOWNLOAD_ERROR", "yt-dlp failed")
+        raise UrlIngestError(
+            "DOWNLOAD_ERROR", "视频下载失败，请稍后重试；如果反复失败，请联系管理员。"
+        )
     media_path = _inside(
         _printed_media_path(getattr(completed, "stdout", None), download_dir),
         download_dir,

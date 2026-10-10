@@ -75,7 +75,7 @@ def inputs(tmp_path, monkeypatch, cleaner):
             "api": "openai-completions",
             "models": [{"id": "fixture", "name": name, "input": ["text"], "reasoning": False}],
         }
-        for name in ("primary", "alternate", "unrelated")
+        for name in ("primary", "alternate", "final", "unrelated")
     }
     (config / "models.json").write_text(json.dumps({"providers": models}))
     (config / "auth.json").write_text(
@@ -102,7 +102,7 @@ def inputs(tmp_path, monkeypatch, cleaner):
     return run, config
 
 
-def prepare(run, config):
+def prepare(run, config, *, final=False):
     stage = task_container.stage_inputs(run)
     snapshot = run / ".generation-config"
     task_container.snapshot_models(
@@ -111,7 +111,7 @@ def prepare(run, config):
         [
             {"provider": "primary", "model": "fixture"},
             {"provider": "alternate", "model": "fixture"},
-        ],
+        ] + ([{"provider": "final", "model": "fixture"}] if final else []),
     )
     return stage, snapshot
 
@@ -388,9 +388,10 @@ def test_task_output_symlinks_are_not_followed(tmp_path):
 
 
 @docker_test
-def test_real_pi_rpc_loads_only_task_credentials(inputs):
+@pytest.mark.parametrize("final", [False, True])
+def test_real_pi_rpc_loads_only_task_credentials(inputs, final):
     run, config = inputs
-    stage, snapshot = prepare(run, config)
+    stage, snapshot = prepare(run, config, final=final)
     process = launch(stage, snapshot, [
         "pi", "--mode", "rpc", "--provider", "primary", "--model", "fixture",
         "--offline", "--no-extensions", "--no-skills", "--no-context-files",
@@ -411,9 +412,8 @@ def test_real_pi_rpc_loads_only_task_credentials(inputs):
                 response = event
                 break
         assert response and response["success"]
-        assert {model["provider"] for model in response["data"]["models"]} == {
-            "primary", "alternate",
-        }
+        expected = {"primary", "alternate"} | ({"final"} if final else set())
+        assert {model["provider"] for model in response["data"]["models"]} == expected
     finally:
         process.terminate()
         process.communicate(timeout=40)
