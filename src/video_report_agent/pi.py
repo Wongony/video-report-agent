@@ -96,8 +96,8 @@ def _provider_failure(message: dict) -> tuple[str, str | None, int | None]:
         or any(term in lowered for term in (
             "terminated", "stream ended without finish_reason", "timed out", "timeout",
             "responses stream ended before a terminal response event",
-            "connection reset", "connection refused", "econnreset", "econnrefused",
-            "socket hang up", "network error", "unexpected eof",
+            "connection error", "connection reset", "connection refused", "econnreset",
+            "econnrefused", "socket hang up", "network error", "unexpected eof",
         ))
     ):
         return "transient_provider_failure", provider_code, http_status
@@ -232,13 +232,15 @@ class PiRunner:
                 return "switch_model", alternate
             return None
         if category == "output_content_rejected":
-            if on_initial and failure_count == 1:
+            if failure_count == 1:
                 return "retry_model", current
             if on_initial and failure_count == 2 and alternate_key != current_key:
                 return "switch_model", alternate
             return None
         if category == "transient_provider_failure":
-            if failure_count == 1 and request_seconds < PUBLIC_SLOW_FAILURE_SECONDS:
+            if failure_count == 1 and (
+                not on_initial or request_seconds < PUBLIC_SLOW_FAILURE_SECONDS
+            ):
                 return "retry_model", current
             if on_initial and alternate_key != current_key:
                 return "switch_model", alternate

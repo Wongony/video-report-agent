@@ -196,14 +196,19 @@ def test_public_recovery_allows_two_extra_attempts_and_does_not_return_to_primar
 
 
 @pytest.mark.parametrize("age,retry_count", [(2, 1), (164.93, 0)])
-def test_grok_responses_stream_failure_recovers_to_deepseek(tmp_path, age, retry_count):
+@pytest.mark.parametrize("provider_error", [
+    "OpenAI Responses stream ended before a terminal response event", "Connection error.",
+])
+def test_grok_responses_stream_failure_recovers_to_deepseek(
+    tmp_path, age, retry_count, provider_error,
+):
     primary = ("heyroute ", "grok-4.7")
     alternate = ("qwenai", "deepseek-v4.1-flash")
     steps = []
     for index in range(retry_count + 1):
         events = provider_attempt(
             *primary, index + 1, stop_reason="error", age=age,
-            error="OpenAI Responses stream ended before a terminal response event",
+            error=provider_error,
         )
         events[1]["message"].update(
             api="openai-responses",
@@ -242,6 +247,56 @@ def test_grok_responses_stream_failure_recovers_to_deepseek(tmp_path, age, retry
     assert state["recovery_count"] == retry_count + 1
 
 
+@pytest.mark.parametrize("primary,alternate,first_error,first_age,second_error,second_age", [
+    (("qwenai", "deepseek-v4.1-flash"), ("heyroute ", "grok-4.7"),
+     "HTTP 400 data_inspection_failed: input data", 1,
+     "OpenAI Responses stream ended before a terminal response event", 169),
+    (("heyroute ", "grok-4.7"), ("qwenai", "deepseek-v4.1-flash"),
+     "OpenAI Responses stream ended before a terminal response event", 172,
+     "Output data may contain inappropriate content.", 42),
+])
+@pytest.mark.parametrize("final_stop", ["stop", "error"])
+def test_fallback_failure_gets_one_bounded_retry(
+    tmp_path, primary, alternate, first_error, first_age, second_error, second_age, final_stop,
+):
+    process = RecoveryProcess([
+        provider_attempt(*primary, 1, stop_reason="error", error=first_error, age=first_age),
+        provider_attempt(*alternate, 2, stop_reason="error", error=second_error, age=second_age),
+        provider_attempt(*alternate, 3, stop_reason=final_stop,
+                         error=second_error if final_stop == "error" else None),
+    ])
+    recovery = {
+        "selected": {"provider": primary[0], "model": primary[1], "thinking": "low"},
+        "alternate": {"provider": alternate[0], "model": alternate[1], "thinking": "low"},
+        "max_additional_attempts": 2,
+    }
+    state = {
+        "initial": recovery["selected"], "current": recovery["selected"].copy(),
+        "alternate": recovery["alternate"], "recovery_scheduled": 0,
+        "recovery_count": 0, "request_count": 0, "started_at": time.time(),
+    }
+    consume = PiRunner(model_recovery=recovery)._consume(
+        process, tmp_path, "generate report", model_recovery=recovery,
+        model_state=state, deadline=time.monotonic() + 600,
+    )
+    if final_stop == "stop":
+        assert asyncio.run(consume) == recovery["alternate"]
+    else:
+        with pytest.raises(PiError):
+            asyncio.run(consume)
+    assert len(process.prompts) == 3
+    assert len(process.model_commands) == 1
+    assert state["recovery_count"] == 2
+    events = [json.loads(line) for line in
+              (tmp_path / "model-attempts.jsonl").read_text().splitlines()]
+    assert [e["action"] for e in events if e["kind"] == "recovery_scheduled"] == [
+        "switch_model", "retry_model",
+    ]
+    assert [(e["provider"], e["model"]) for e in events if e["kind"] == "request_started"] == [
+        primary, alternate, alternate,
+    ]
+
+
 @pytest.mark.parametrize("message,expected", [
     ({"provider": "qwenai", "stopReason": "error",
       "errorMessage": "HTTP 400 data_inspection_failed: input data"},
@@ -251,6 +306,8 @@ def test_grok_responses_stream_failure_recovers_to_deepseek(tmp_path, age, retry
      ("output_content_rejected", "data_inspection_failed", None)),
     ({"provider": "heyroute ", "stopReason": "error",
       "errorMessage": "Stream ended without finish_reason: terminated"},
+     ("transient_provider_failure", None, None)),
+    ({"provider": "heyroute ", "stopReason": "error", "errorMessage": "Connection error."},
      ("transient_provider_failure", None, None)),
     ({"provider": "qwenai", "stopReason": "error",
       "errorMessage": "HTTP 401 invalid_api_key"},

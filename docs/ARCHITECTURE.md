@@ -35,6 +35,8 @@ ASR 片段编号保留原始来源位置，过滤空白或无效片段后允许�
 
 当调用方为单个任务提供 `model_recovery` 时，PiRunner 额外写入 `model-attempts.jsonl`：逐次追加模型请求的 provider/model、时间、结束原因、可用用量和供应商 request ID，不复制请求正文。可恢复的请求错误会在同一个 Pi 进程和 session 中通过 `set_model` 与新 prompt 续跑；这条路径用任务级 Pi 配置关闭 Pi Agent / Provider 自动重试，不修改共享设置。没有 recovery policy 的 CLI/Local 调用保持原行为。
 
+连接错误 `Connection error.` 属可恢复的瞬态故障。初始模型的慢速瞬态故障仍直接切备用；备用模型首次发生瞬态故障（包括慢失败）或首次失败为输出检查拒绝时，可在该模型续试一次。所有续试共用调用方的恢复次数和剩余时间预算，切换后不返回初始模型；输入检查拒绝、未知错误等未覆盖路径不会因还有预算就自动重试。失败次数按模型累计，不因中间成功的工具调用轮次清零。
+
 Agent 日志默认保留每轮结束消息与 usage、工具参数/结果、生命周期和错误，丢弃流式碎片、重复结束快照与原始推理正文。`request_trace.ts` 使用 Pi 的 `before_provider_request` 与非空 `thinking_delta` / `text_delta` / `toolcall_delta` 记录请求起点、首个有效响应和单调时钟延迟；经 RPC notification 传回 Python，不记录请求凭证或完整 payload。该值包含客户端、网络与供应商等待，不代表供应商纯推理时间；未提供这些钩子的历史日志保持未知。
 
 `PI_TRACE_FULL=1` 额外写入 `pi.raw.events.jsonl` 供诊断；终态任务的原始流在清理时按 `PI_TRACE_FULL_MAX_AGE_DAYS`（默认 7，0 禁用）过期。精简日志与历史 `pi.events.jsonl` 不自动删除，Pi 自身会话保留策略不变。
