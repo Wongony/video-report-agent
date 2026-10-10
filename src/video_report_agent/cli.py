@@ -15,6 +15,9 @@ def main():
     load_dotenv(PROJECT_ROOT / ".env")
     parser = argparse.ArgumentParser()
     parser.add_argument("--runs", type=Path, default=Path("runs"))
+    parser.add_argument(
+        "--database", type=Path, help="Shared embedding database; default runs/state.sqlite3"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("generate")
     run.add_argument("url")
@@ -48,7 +51,9 @@ def main():
                 asr_backend=args.asr_backend,
                 asr_model=args.asr_model,
                 ocr_backend=args.ocr_backend,
-            )
+                database_path=args.database,
+            ),
+            database_path=args.database,
         )
         print(json.dumps(status, ensure_ascii=False, indent=2))
         return 0 if status["state"] == "RENDERED" else 1

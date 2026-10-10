@@ -4,15 +4,65 @@ import time
 from types import SimpleNamespace
 
 import pytest
+from storage_fixtures import import_fixtures
 
 from video_report_agent import pipeline
 from video_report_agent.asr import DEFAULT_ASR_MODEL, normalize_asr_segments
 from video_report_agent.ingest import validate_bilibili_url
-from video_report_agent.reuse import reuse_download, reuse_transcript, validated_asr
 from video_report_agent.retention import cleanup_media
+from video_report_agent.reuse import reuse_download, reuse_transcript, validated_asr
 from video_report_agent.transcript_foundation import FUSION_VERSION, NORMALIZER_VERSION
 
 URL = "https://www.bilibili.com/video/BV1cZ8x6sEhF/"
+
+
+@pytest.fixture(autouse=True)
+def import_legacy_fixtures(monkeypatch):
+    original = pipeline.generate
+
+    def generate(run, **options):
+        import_fixtures(run.parent)
+        return original(run, **options)
+
+    monkeypatch.setattr(pipeline, "generate", generate)
+
+
+sql_reuse_transcript, sql_reuse_download = reuse_transcript, reuse_download
+sql_cleanup_media = cleanup_media
+
+
+def reuse_transcript(run, metadata):
+    import_fixtures(run.parent)
+    return sql_reuse_transcript(run, metadata)
+
+
+def reuse_download(source, run, **options):
+    import_fixtures(run.parent)
+    return sql_reuse_download(source, run, **options)
+
+
+def cleanup_media(root):
+    import_fixtures(root)
+    return sql_cleanup_media(root)
+
+
+def built_fixture(run, unit):
+    metadata = json.loads((run / "input.json").read_text())
+    (run / "canonical-transcript.jsonl").write_text(json.dumps(vars(unit)) + "\n")
+    (run / "source-text-events.jsonl").write_text("{}\n")
+    pipeline.write_json(
+        run / "transcript-manifest.json",
+        {
+            "status": "READY",
+            "video_id": metadata["video_id"],
+            "transcript_mode": "asr-only",
+            "normalizer_version": NORMALIZER_VERSION,
+            "fusion_version": FUSION_VERSION,
+            "canonical_unit_count": 1,
+            "artifacts": {"canonical_transcript": "canonical-transcript.jsonl"},
+        },
+    )
+    return SimpleNamespace(canonical_units=[unit]), {}, {}
 
 
 @pytest.fixture
@@ -31,11 +81,7 @@ def completed(tmp_path):
     (run / "source-text-events.jsonl").write_text("{}\n")
     pipeline.write_json(
         run / "asr.json",
-        {
-            "segments": [
-                {"ordinal": 0, "start_ms": 0, "end_ms": 1000, "text": "hello", "words": []}
-            ]
-        },
+        {"segments": [{"ordinal": 0, "start_ms": 0, "end_ms": 1000, "text": "hello", "words": []}]},
     )
     pipeline.write_json(
         run / "transcript-manifest.json",
@@ -58,24 +104,39 @@ def completed(tmp_path):
     return run, metadata
 
 
-@pytest.mark.parametrize("source_mode,target_mode", [
-    ("standard", "brief"), ("brief", "standard"), ("brief", None),
-])
+@pytest.mark.parametrize(
+    "source_mode,target_mode",
+    [
+        ("standard", "brief"),
+        ("brief", "standard"),
+        ("brief", None),
+    ],
+)
 @pytest.mark.parametrize("gapped_ordinals", [False, True])
 @pytest.mark.parametrize("media_pruned", [False, True])
 def test_pipeline_reuses_inputs_and_generates_new_report(
-    completed, monkeypatch, source_mode, target_mode, media_pruned, gapped_ordinals,
+    completed,
+    monkeypatch,
+    source_mode,
+    target_mode,
+    media_pruned,
+    gapped_ordinals,
 ):
     previous, metadata = completed
     if gapped_ordinals:
-        normalized = normalize_asr_segments([
-            {"start": 0, "end": 1, "text": "hello"},
-            {"start": 1, "end": 2, "text": " "},
-            {"start": 2, "end": 3, "text": "world"},
-        ])
-        pipeline.write_json(previous / "asr.json", {
-            "segments": [segment.model_dump() for segment in normalized.segments],
-        })
+        normalized = normalize_asr_segments(
+            [
+                {"start": 0, "end": 1, "text": "hello"},
+                {"start": 1, "end": 2, "text": " "},
+                {"start": 2, "end": 3, "text": "world"},
+            ]
+        )
+        pipeline.write_json(
+            previous / "asr.json",
+            {
+                "segments": [segment.model_dump() for segment in normalized.segments],
+            },
+        )
     metadata.update(report_mode=source_mode, uploader="UP")
     pipeline.write_json(previous / "input.json", metadata)
     info = previous / "download/source.info.json"
@@ -90,7 +151,9 @@ def test_pipeline_reuses_inputs_and_generates_new_report(
         cleanup_media(previous.parent)
         assert not (previous / "download/source.mp4").exists()
     run = pipeline.create_run(
-        previous.parent, URL + "?p=1&share_source=copy", report_mode=target_mode or "standard",
+        previous.parent,
+        URL + "?p=1&share_source=copy",
+        report_mode=target_mode or "standard",
     )
     original_input = json.loads((run / "input.json").read_text())
     if target_mode is None:
@@ -115,7 +178,8 @@ def test_pipeline_reuses_inputs_and_generates_new_report(
         (current / "report.html").write_text("fresh report")
 
     monkeypatch.setattr(
-        pipeline, "PiRunner",
+        pipeline,
+        "PiRunner",
         lambda: SimpleNamespace(run=generate_report, provider="test", model="test"),
     )
     status = pipeline.generate(run)
@@ -205,17 +269,19 @@ def test_completed_asr_is_reused_when_transcript_is_incomplete(completed, monkey
         unit = SimpleNamespace(
             unit_id="unit-000001", start_ms=0, end_ms=1000, canonical_text="fresh text"
         )
-        return SimpleNamespace(canonical_units=[unit]), {}, {}
+        return built_fixture(run, unit)
 
     async def report(current):
         calls.append("report")
         assert "fresh text" in (current / "transcript.md").read_text()
+        (current / "report.html").write_text("<html><body>fixture</body></html>")
 
     monkeypatch.setattr(pipeline, "extract_audio", extract)
     monkeypatch.setattr(pipeline, "transcribe_audio", transcribe)
     monkeypatch.setattr(pipeline, "build_transcript", build)
     monkeypatch.setattr(
-        pipeline, "PiRunner",
+        pipeline,
+        "PiRunner",
         lambda: SimpleNamespace(run=report, provider="test", model="test"),
     )
     status = pipeline.generate(run)
@@ -238,9 +304,9 @@ def test_invalid_asr_is_not_reused(completed, monkeypatch):
 
     def transcribe(*args, **kwargs):
         called.append("asr")
-        segment = SimpleNamespace()
+        segment = {"ordinal": 0, "start_ms": 0, "end_ms": 1000, "text": "fresh text"}
         return SimpleNamespace(
-            to_dict=lambda: {"segments": []},
+            to_dict=lambda: {"segments": [segment]},
             segments=[segment],
         )
 
@@ -248,16 +314,17 @@ def test_invalid_asr_is_not_reused(completed, monkeypatch):
         unit = SimpleNamespace(
             unit_id="unit-000001", start_ms=0, end_ms=1000, canonical_text="fresh text"
         )
-        return SimpleNamespace(canonical_units=[unit]), {}, {}
+        return built_fixture(run, unit)
 
     async def report(current):
-        return None
+        (current / "report.html").write_text("<html><body>fixture</body></html>")
 
     monkeypatch.setattr(pipeline, "extract_audio", extract)
     monkeypatch.setattr(pipeline, "transcribe_audio", transcribe)
     monkeypatch.setattr(pipeline, "build_transcript", build)
     monkeypatch.setattr(
-        pipeline, "PiRunner",
+        pipeline,
+        "PiRunner",
         lambda: SimpleNamespace(run=report, provider="test", model="test"),
     )
     assert pipeline.generate(run)["state"] == "RENDERED"
@@ -303,9 +370,19 @@ def test_audio_download_reuse_does_not_supply_video_mode(completed):
 @pytest.mark.parametrize("ordinals", [[0, 0], [2, 1]])
 def test_duplicate_or_reversed_asr_ordinals_are_not_reused(completed, ordinals):
     previous, metadata = completed
-    pipeline.write_json(previous / "asr.json", {"segments": [
-        {"ordinal": ordinal, "start_ms": i * 1000, "end_ms": (i + 1) * 1000,
-         "text": "hello", "words": []}
-        for i, ordinal in enumerate(ordinals)
-    ]})
+    pipeline.write_json(
+        previous / "asr.json",
+        {
+            "segments": [
+                {
+                    "ordinal": ordinal,
+                    "start_ms": i * 1000,
+                    "end_ms": (i + 1) * 1000,
+                    "text": "hello",
+                    "words": [],
+                }
+                for i, ordinal in enumerate(ordinals)
+            ]
+        },
+    )
     assert validated_asr(previous, metadata) is None

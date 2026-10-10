@@ -82,7 +82,7 @@ def test_cli_passes_mode(tmp_path, monkeypatch):
         "--report-mode", "brief",
     ])
 
-    def generate(run):
+    def generate(run, **options):
         captured.append(json.loads((run / "input.json").read_text())["report_mode"])
         return {"state": "RENDERED"}
 

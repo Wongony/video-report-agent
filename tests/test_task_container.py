@@ -141,6 +141,54 @@ def assert_removed(command):
 
 
 @docker_test
+def test_public_task_cannot_access_business_database_or_side_files(inputs, tmp_path, monkeypatch):
+    import sqlite3
+    from video_report_agent.storage import Store
+
+    run, config = inputs
+    database = tmp_path / "runs" / "state.sqlite3"
+    store = Store(database)
+    metadata = json.loads((run / "input.json").read_text())
+    store.register(run, metadata, {"run_id": run.name, "state": "QUEUED"})
+    store.document(run.name, "transcript.md", (run / "transcript.md").read_text())
+    store.export(run.name)
+    connection = sqlite3.connect(database)
+    connection.execute("PRAGMA journal_mode=WAL")
+    connection.execute("UPDATE storage_control SET writes_opened_at=1")
+    connection.commit()
+    backup_path = tmp_path / "backups" / "snapshot.sqlite3"
+    backup_path.parent.mkdir()
+    backup_connection = sqlite3.connect(backup_path)
+    connection.backup(backup_connection)
+    backup_connection.close()
+    forbidden = [str(database), str(database) + "-wal", str(database) + "-shm", str(backup_path),
+                 "/app/runs/auth.sqlite3", "/app/runs/auth.sqlite3-wal",
+                 "/app/runs/auth.sqlite3-shm", "/var/run/docker.sock"]
+    monkeypatch.setenv("VIDEO_REPORT_DATABASE_PATH", str(database))
+    stage, snapshot = prepare(run, config)
+    code = (
+        "import json,os; from pathlib import Path; "
+        f"forbidden={forbidden!r}; "
+        "result={'readable_export': 'U001' in Path('/workspace/transcript.md').read_text(), "
+        "'accessible': [p for p in forbidden if Path(p).exists()], "
+        "'database_env': os.environ.get('VIDEO_REPORT_DATABASE_PATH')}; "
+        "Path('/workspace/assets').mkdir(); "
+        "Path('/workspace/assets/isolation.json').write_text(json.dumps(result)); "
+        "Path('/workspace/report.html').write_text('<html><body>fixture</body></html>')"
+    )
+    process = launch(stage, snapshot, ["python", "-c", code])
+    _, stderr = process.communicate(timeout=90)
+    connection.close()
+    assert process.returncode == 0, stderr.decode()
+    task_container.export_outputs(stage, run)
+    result = json.loads((run / "assets/isolation.json").read_text())
+    assert result == {"readable_export": True, "accessible": [], "database_env": None}
+    assert store.run(run.name)["input"] == metadata
+    assert (run / "report.html").is_file()
+    assert_removed(process.args)
+
+
+@docker_test
 def test_real_pi_tools_files_environment_and_inspection(inputs, tmp_path):
     run, config = inputs
     stage, snapshot = prepare(run, config)
@@ -376,6 +424,10 @@ def test_real_pi_rpc_loads_only_task_credentials(inputs):
 @pytest.mark.parametrize("outcome", ["timeout", "cancel"])
 def test_execution_waits_for_real_container_cleanup(inputs, monkeypatch, outcome):
     run, config = inputs
+    from video_report_agent.storage import Store
+    store = Store(run.parent / "state.sqlite3")
+    store.register(run, json.loads((run / "input.json").read_text()), {"state": "QUEUED"})
+    store.document(run.name, "transcript.md", (run / "transcript.md").read_text())
     (run / "status.json").write_text('{"state":"QUEUED"}')
     original = subprocess.Popen
     worker = f'''
@@ -391,7 +443,7 @@ def launch(stage, config, command, deadline):
     (run / 'task-name.txt').write_text(cmd[cmd.index('--name')+1])
     return cmd
 pi.launch_command = launch
-asyncio.run(pi.PiRunner(provider='primary', model='fixture', timeout=30).run(run))
+asyncio.run(pi.PiRunner(provider='primary', model='fixture', timeout=30, isolation='docker').run(run))
 '''
     names = []
 
@@ -444,7 +496,7 @@ def test_failed_supervisor_does_not_export_task_outputs(inputs, monkeypatch):
     monkeypatch.setattr(pi, 'export_outputs', lambda *args: exported.append(args))
     monkeypatch.setattr(task_container, 'require_cleaner', lambda scope: None)
     with pytest.raises(PiError, match='exit cleanly'):
-        asyncio.run(PiRunner(provider='primary', model='fixture').run(run))
+        asyncio.run(PiRunner(provider='primary', model='fixture', isolation='docker').run(run))
     assert not exported
 
 

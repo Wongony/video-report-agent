@@ -74,6 +74,8 @@ def test_raw_retention_only_expires_terminal_debug_logs(tmp_path, monkeypatch):
         (run / 'pi.raw.events.jsonl').write_text('raw')
         (run / 'pi.events.jsonl').write_text('compact')
         (run / 'report.html').write_text('report')
+    from storage_fixtures import import_fixtures
+    import_fixtures(tmp_path)
     cleanup_media(tmp_path)
     for state in ('RENDERED', 'FAILED', 'RUNNING'):
         run = tmp_path / state

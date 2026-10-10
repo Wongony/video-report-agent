@@ -5,6 +5,7 @@ import time
 
 from video_report_agent import execution
 from video_report_agent.pipeline import create_run
+from video_report_agent.storage import Store
 
 
 def test_timeout_stops_worker_and_child(tmp_path, monkeypatch):
@@ -35,7 +36,7 @@ def test_worker_completes_without_provider_call(tmp_path):
     path = run / "input.json"
     metadata = json.loads(path.read_text())
     metadata["url"] = "https://example.com/invalid"
-    path.write_text(json.dumps(metadata))
+    Store(tmp_path / "state.sqlite3", initialize=False).metadata(run.name, metadata)
     status = execution.generate(run, timeout=10)
     assert status["state"] == "FAILED"
     assert status["error_category"] != "EXECUTION_TIMEOUT"
@@ -78,3 +79,30 @@ def test_cancel_stops_worker_and_child(tmp_path, monkeypatch):
     time.sleep(1.1)
     assert not (run / "survived").exists()
     assert json.loads((run / "status.json").read_text())["state"] == "CANCELLED"
+
+
+def test_worker_registration_failure_still_terminates_launched_process(tmp_path, monkeypatch):
+    run = create_run(tmp_path, "BV1aTtb6uE7d")
+    original = subprocess.Popen
+    processes = []
+    code = (
+        "import time; from pathlib import Path; time.sleep(1); "
+        "Path('survived').touch(); time.sleep(30)"
+    )
+
+    def launch(command, **options):
+        process = original([sys.executable, "-c", code], cwd=run, **options)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(execution.subprocess, "Popen", launch)
+    monkeypatch.setattr(
+        Store,
+        "worker",
+        lambda *args, **options: (_ for _ in ()).throw(RuntimeError("worker registration fault")),
+    )
+    status = execution.generate(run, timeout=5)
+    assert status["state"] == "FAILED" and status["error"] == "worker registration fault"
+    assert processes[0].poll() is not None
+    time.sleep(1.1)
+    assert not (run / "survived").exists()

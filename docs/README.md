@@ -11,3 +11,5 @@
 - [合成 smoke 与可选评测](../evals/report-review/README.md)
 
 维护规则见 [AGENTS.md](../AGENTS.md)。文档描述源码能力，具体本地验证、真实模型结果与部署状态分别说明。
+
+- [SQLite 执行存储与嵌入事务](sqlite-storage.md)

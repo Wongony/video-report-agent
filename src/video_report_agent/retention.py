@@ -9,14 +9,23 @@ from pathlib import Path
 
 from .ingest import UrlIngestError, _metadata, validate_bilibili_url
 from .reuse import validated_asr, validated_transcript
+from .storage import TERMINAL, Store
 
 _MEDIA_SUFFIXES = {
-    ".mp4", ".m4a", ".webm", ".opus", ".mp3",
-    ".ogg", ".aac", ".flac", ".wav", ".mkv",
+    ".mp4",
+    ".m4a",
+    ".webm",
+    ".opus",
+    ".mp3",
+    ".ogg",
+    ".aac",
+    ".flac",
+    ".wav",
+    ".mkv",
 }
 
 
-def cleanup_media(root: Path) -> None:
+def cleanup_media(root: Path, *, database_path=None) -> None:
     """Keep terminal runs' media for seven days by default; zero disables a limit."""
     try:
         keep = int(os.getenv("MEDIA_KEEP_LAST", "0"))
@@ -24,18 +33,17 @@ def cleanup_media(root: Path) -> None:
         trace_days = int(os.getenv("PI_TRACE_FULL_MAX_AGE_DAYS", "7"))
         if keep < 0 or days < 0 or trace_days < 0:
             raise ValueError("media retention limits must be non-negative")
+        store = Store(database_path or root / "state.sqlite3", initialize=False)
+        if not store.path.exists():
+            return
         terminal = []
-        for run in root.iterdir():
-            if not run.is_dir() or run.is_symlink():
-                continue
-            status = run / "status.json"
-            try:
-                if json.loads(status.read_text()).get("state") in {
-                    "RENDERED", "FAILED", "CANCELLED",
-                }:
-                    terminal.append((status.stat().st_mtime, run))
-            except (OSError, ValueError, AttributeError):
-                continue
+        with store.read() as db:
+            for row in db.execute("SELECT workspace,status_json,updated_at FROM runs"):
+                status = json.loads(row["status_json"])
+                if status.get("state") in TERMINAL:
+                    terminal.append(
+                        (status.get("finished_at") or row["updated_at"], Path(row["workspace"]))
+                    )
         cutoff = time.time() - days * 86400
         for index, (finished, run) in enumerate(sorted(terminal, reverse=True)):
             # Only the opt-in raw stream expires; compact traces remain usable.
@@ -49,12 +57,15 @@ def cleanup_media(root: Path) -> None:
             download = run / "download"
             if not download.is_symlink():
                 paths.extend(
-                    path for path in download.glob("source*")
-                    if path.suffix in _MEDIA_SUFFIXES
+                    path for path in download.glob("source*") if path.suffix in _MEDIA_SUFFIXES
                 )
             for path in paths:
                 try:
                     path.unlink(missing_ok=True)
+                    with store.transaction() as db:
+                        db.execute(
+                            "UPDATE artifacts SET available=0 WHERE path=?", (str(path.resolve()),)
+                        )
                 except OSError:
                     logging.exception("Could not remove expired media: %s", path)
     except (OSError, ValueError):
@@ -62,16 +73,20 @@ def cleanup_media(root: Path) -> None:
         logging.exception("Media cleanup failed")
 
 
-def cleanup_cancelled_run(run: Path) -> None:
+def cleanup_cancelled_run(run: Path, *, database_path=None) -> None:
     """Keep only complete reusable inputs and small run diagnostics after cancellation."""
-    try:
-        metadata = json.loads((run / "input.json").read_text())
-    except (OSError, ValueError, AttributeError):
-        metadata = {}
+    store = Store(database_path or run.parent / "state.sqlite3", initialize=False)
+    metadata = store.run(run.name)["input"]
+    store.export(run.name, include_report=False)
 
     keep = {
-        "input.json", "status.json", "queue.json", "run.trace.jsonl",
-        "worker.log", "download.log", "cancel.requested",
+        "input.json",
+        "status.json",
+        "queue.json",
+        "run.trace.jsonl",
+        "worker.log",
+        "download.log",
+        "cancel.requested",
     }
 
     download = run / "download"
@@ -81,8 +96,10 @@ def cleanup_cancelled_run(run: Path) -> None:
         audio_only = metadata.get("transcript_mode", "asr-only") == "asr-only"
         media = next(
             (
-                path for path in sorted(download.glob("source.*"))
-                if path.is_file() and path.stat().st_size
+                path
+                for path in sorted(download.glob("source.*"))
+                if path.is_file()
+                and path.stat().st_size
                 and path.suffix in _MEDIA_SUFFIXES
                 and (audio_only or path.suffix in {".mp4", ".mkv", ".webm"})
             ),
@@ -93,7 +110,8 @@ def cleanup_cancelled_run(run: Path) -> None:
         _metadata(info, source)
         reusable_download = {media.name, info.name}
         reusable_download.update(
-            path.name for path in download.glob("source.*")
+            path.name
+            for path in download.glob("source.*")
             if path.suffix in {".srt", ".vtt", ".ass"} and path.is_file()
         )
         for path in download.iterdir():
@@ -127,4 +145,9 @@ def cleanup_cancelled_run(run: Path) -> None:
                 path.unlink(missing_ok=True)
         except OSError:
             logging.exception("Could not remove cancelled-run artifact: %s", path)
-    cleanup_media(run.parent)
+    with store.transaction() as db:
+        for row in db.execute(
+            "SELECT name,path,kind FROM artifacts WHERE run_id=?", (run.name,)
+        ).fetchall():
+            store.artifact(run.name, row["name"], Path(row["path"]), row["kind"], db=db)
+    cleanup_media(run.parent, database_path=store.path)

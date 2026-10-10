@@ -23,9 +23,9 @@
 
 ## 任务数据与接口
 
-`create_run` 保存 `input.json`（来源、ASR 配置、报告模式、模型选择）与初始 `status.json`；`generate(run)` 执行管线，外层 execution 监督 Worker。
+`create_run` 登记数据库中的输入与初始状态，再导出任务材料；独立运行默认 `runs/state.sqlite3`，嵌入调用显式传 `database_path`。受监督 execution 原子认领 run，并把数据库路径与执行 ID 传给可信 Python Worker。调用方持有业务事务时，Core 方法使用同一个 `db`，不另开连接或提交；提交后才导出与派发。详见 [SQLite 存储](sqlite-storage.md)。
 
-每个 `runs/<run-id>/` 保存媒体、`asr.json`、`source-text-events.jsonl`、`canonical-transcript.jsonl`、`transcript-manifest.json`、`transcript.md`、所选 Skill 资产、Pi 会话与最终报告。条件路径和失败任务不会拥有所有产物。 终态任务的原始媒体和转换音频默认按状态文件修改时间滚动保留七天（`MEDIA_KEEP_LAST=0`、`MEDIA_MAX_AGE_DAYS=7`），在现有清理时机删除过期媒体；运行中任务不清理。完整 ASR、整套转写及输入配置长期保留。
+视频、任务、ASR/cloud task、来源事件、规范单元、转写正文、报告 HTML、缓存和结构化统计入库。`input.json`、`status.json`、转写和 HTML 是可重建执行导出；媒体、PNG、资源、Pi 会话/配置快照和原始诊断仍存文件。SQL 缓存区分下载、ASR 和完整转写，认领记录生产 run、执行 ID 与 deadline；READY 正文原子保存，活跃生产者不能被接管，退出后释放未完成占用，旧 ID 不得覆盖后续生产者。媒体清理沿用七天/数量策略，同步产物可用状态，不使 READY 转写或 HTML 失效。
 
 ASR 片段编号保留原始来源位置，过滤空白或无效片段后允许间断；复用检查要求编号严格递增，不要求从零连续编号。
 
