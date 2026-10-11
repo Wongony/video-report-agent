@@ -1,6 +1,6 @@
 # Core 当前架构
 
-> 核对日期：2026-09-24；源码基线 `428f4fe`。运行参数以调用方环境和任务保存的输入为准。
+运行参数以调用方环境和任务保存的输入为准；本文描述当前实现，安装与配置入口见 [README](../README.zh-CN.md)。
 
 ## 模块与执行流程
 
@@ -15,6 +15,7 @@
 | [transcript.py](../src/video_report_agent/transcript.py)、[transcript_foundation.py](../src/video_report_agent/transcript_foundation.py) | 来源事件、规范单元、可选字幕/OCR 融合 |
 | [pi.py](../src/video_report_agent/pi.py)、[产品 Skill](../src/video_report_agent/skills/video-report/SKILL.md) | 选择模式资产、Pi RPC 和完成判断；Skill 规定内容与表达 |
 | [report_content.py](../src/video_report_agent/report_content.py)、[report_image.py](../src/video_report_agent/report_image.py) | 原始简介处理、HTML 后处理与长图导出 |
+| [storage.py](../src/video_report_agent/storage.py) | SQLite 正文、执行身份、缓存认领与结构化事实；支持调用方活动事务 |
 | [reuse.py](../src/video_report_agent/reuse.py)、[retention.py](../src/video_report_agent/retention.py) | 兼容输入复用与媒体清理 |
 | [trace.py](../src/video_report_agent/trace.py)、[usage.py](../src/video_report_agent/usage.py) | 阶段事件、调用用量和费用估算缓存 |
 | [inspect_report.py](../src/video_report_agent/inspect_report.py)、[evaluate_report.py](../src/video_report_agent/evaluate_report.py) | 程序检查与受控比较；不提供自动语义验收 |
@@ -35,7 +36,7 @@ ASR 片段编号保留原始来源位置，过滤空白或无效片段后允许�
 
 `run.trace.jsonl` 记录下载、FFmpeg、ASR、转写、Agent、截图阶段；`pi.events.jsonl` 记录模型与工具事件。两层保留各自职责。
 
-当调用方为单个任务提供 `model_recovery` 时，PiRunner 额外写入 `model-attempts.jsonl`：逐次追加模型请求的 provider/model、时间、结束原因、可用用量和供应商 request ID，不复制请求正文。可恢复的请求错误会在同一个 Pi 进程和 session 中通过 `set_model` 与新 prompt 续跑；这条路径用任务级 Pi 配置关闭 Pi Agent / Provider 自动重试，不修改共享设置。没有 recovery policy 的 CLI/Local 调用保持原行为。
+当调用方为单个任务提供 `model_recovery` 时，PiRunner 额外写入 `model-attempts.jsonl`：逐次追加模型请求的 provider/model、时间、结束原因、可用用量和供应商 request ID，不复制请求正文。可恢复的请求错误会在同一个 Pi 进程和 session 中通过 `set_model` 与新 prompt 续跑；保留有效历史和已写文件，重新发起模型请求，不从失败输出的 token 位置接续；这条路径用任务级 Pi 配置关闭 Pi Agent / Provider 自动重试，不修改共享设置。没有 recovery policy 的 CLI/Local 调用保持原行为。
 
 连接错误 `Connection error.` 属可恢复的瞬态故障。初始模型的慢速瞬态故障仍直接切备用；备用模型首次发生瞬态故障（包括慢失败）或首次失败为输出检查拒绝时，可在该模型续试一次。所有续试共用调用方的恢复次数和剩余时间预算，切换后不返回初始模型；输入检查拒绝、未知错误等未覆盖路径不会因还有预算就自动重试。失败次数按模型累计，不因中间成功的工具调用轮次清零。
 
@@ -51,7 +52,7 @@ Pi consumer 等待 `agent_settled`，并要求最终 assistant 的 `stopReason =
 
 `REPORT_REVIEW` 默认关闭。开启后向同一 Agent 提供检查工具；工具返回 `semantic_review: not_performed`、`visual_quality: not_scored`，不保证模型调用、修复或质量提升。
 
-## Pi 任务容器（2026-10-02 本地实现，未部署）
+## Pi 任务容器
 
 `PiRunner` 默认直接使用宿主机的 Pi；只有显式设置 `PI_TASK_ISOLATION=docker` 或 `isolation="docker"` 才为每个任务启动 Docker 容器。选择隔离模式后若启动失败，任务直接失败，不回退到宿主机。下载、ASR 和交付后的简介填充/PNG 仍在可信 Worker 中运行。
 
